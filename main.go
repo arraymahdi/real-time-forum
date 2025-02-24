@@ -7,6 +7,11 @@ import (
 )
 
 func main() {
+	// Initialize the database
+	initDB()
+	defer db.Close()
+
+	// Set up routes
 	http.HandleFunc("/register", registerHandler)
 	http.HandleFunc("/login", loginHandler)
 
