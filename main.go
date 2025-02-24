@@ -20,6 +20,10 @@ func main() {
 	http.HandleFunc("/comments", jwtMiddleware(createCommentHandler))
 	http.HandleFunc("/comments/all", getCommentsHandler)
 
+	http.HandleFunc("/ws", wsHandler)
+	http.HandleFunc("/messages", getMessagesHandler)
+	http.HandleFunc("/users", getUsersHandler)
+
 	fmt.Println("Server running on port 8088")
 	log.Fatal(http.ListenAndServe(":8088", nil))
 }
