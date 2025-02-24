@@ -3,15 +3,18 @@ package main
 import (
 	"database/sql"
 	"fmt"
+	"log"
 	_ "github.com/mattn/go-sqlite3"
 )
 
-func main() {
-	db, err := sql.Open("sqlite3", "forum.db")
+var db *sql.DB
+
+func initDB() {
+	var err error
+	db, err = sql.Open("sqlite3", "forum.db")
 	if err != nil {
-		panic(err)
+		log.Fatal(err)
 	}
-	defer db.Close()
 
 	queries := []string{
 		`CREATE TABLE IF NOT EXISTS users (
@@ -56,7 +59,7 @@ func main() {
 	for _, query := range queries {
 		_, err := db.Exec(query)
 		if err != nil {
-			panic(err)
+			log.Fatal(err)
 		}
 	}
 
