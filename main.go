@@ -15,6 +15,11 @@ func main() {
 	http.HandleFunc("/register", registerHandler)
 	http.HandleFunc("/login", loginHandler)
 
+	http.HandleFunc("/posts", jwtMiddleware(createPostHandler))
+	http.HandleFunc("/posts/all", getPostsHandler)
+	http.HandleFunc("/comments", jwtMiddleware(createCommentHandler))
+	http.HandleFunc("/comments/all", getCommentsHandler)
+
 	fmt.Println("Server running on port 8088")
 	log.Fatal(http.ListenAndServe(":8088", nil))
 }
