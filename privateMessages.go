@@ -2,108 +2,102 @@ package main
 
 import (
 	"encoding/json"
+	"fmt"
 	"log"
 	"net/http"
-	"strconv"
 	"sync"
 
 	"github.com/gorilla/websocket"
+	_ "github.com/mattn/go-sqlite3"
 )
 
-var upgrader = websocket.Upgrader{CheckOrigin: func(r *http.Request) bool { return true }}
-var connections = make(map[int]*websocket.Conn)
-var onlineUsers = make(map[int]bool)
-var mutex sync.Mutex
+var upgrader = websocket.Upgrader{
+	CheckOrigin: func(r *http.Request) bool {
+		return true
+	},
+}
 
-// WebSocket handler
-func wsHandler(w http.ResponseWriter, r *http.Request) {
+type Message struct {
+	SenderID   int    `json:"sender_id"`
+	ReceiverID int    `json:"receiver_id"`
+	Content    string `json:"content"`
+}
+
+type Client struct {
+	conn *websocket.Conn
+	id   int
+}
+
+var (
+	clients    = make(map[int]*Client)
+	clientsMux sync.Mutex
+)
+
+func handleConnections(w http.ResponseWriter, r *http.Request) {
 	conn, err := upgrader.Upgrade(w, r, nil)
 	if err != nil {
-		http.Error(w, "Could not open WebSocket connection", http.StatusBadRequest)
+		log.Println("WebSocket upgrade error:", err)
 		return
 	}
 	defer conn.Close()
 
-	userID, err := strconv.Atoi(r.URL.Query().Get("userId"))
+	// Read user ID as JSON
+	var user struct {
+		UserID int `json:"user_id"`
+	}
+	err = conn.ReadJSON(&user)
 	if err != nil {
-		http.Error(w, "Invalid user ID", http.StatusBadRequest)
+		log.Println("Failed to read user ID:", err)
 		return
 	}
 
-	mutex.Lock()
-	connections[userID] = conn
-	onlineUsers[userID] = true
-	mutex.Unlock()
+	userID := user.UserID
 
-	notifyUserStatusChange(userID, true)
+	// Register client
+	clientsMux.Lock()
+	clients[userID] = &Client{conn: conn, id: userID}
+	clientsMux.Unlock()
 
+	log.Printf("User %d connected", userID)
+
+	// Ensure connection stays open
 	for {
-		_, message, err := conn.ReadMessage()
-		if err != nil {
-			mutex.Lock()
-			delete(connections, userID)
-			delete(onlineUsers, userID)
-			mutex.Unlock()
-
-			notifyUserStatusChange(userID, false)
-			break
-		}
-
 		var msg Message
-		if err := json.Unmarshal(message, &msg); err == nil {
-			saveMessage(msg)
-			broadcastMessage(msg)
+		err := conn.ReadJSON(&msg)
+		if err != nil {
+			log.Println("Read error:", err)
+			break // Close connection if read fails
 		}
+		saveMessage(msg)
+		forwardMessage(msg)
 	}
 }
 
-func notifyUserStatusChange(userID int, isOnline bool) {
-	message, _ := json.Marshal(map[string]interface{}{
-		"user_id": userID,
-		"online":  isOnline,
-		"type":    "user_status",
-	})
-
-	mutex.Lock()
-	for _, conn := range connections {
-		conn.WriteMessage(websocket.TextMessage, message)
-	}
-	mutex.Unlock()
-}
-
-// Save message
 func saveMessage(msg Message) {
-	_, err := db.Exec(`INSERT INTO messages (sender_id, receiver_id, content) VALUES (?, ?, ?)`, msg.SenderID, msg.ReceiverID, msg.Content)
+	_, err := db.Exec("INSERT INTO messages (sender_id, receiver_id, content) VALUES (?, ?, ?)", msg.SenderID, msg.ReceiverID, msg.Content)
 	if err != nil {
-		log.Println("Error saving message:", err)
+		log.Println("Failed to save message:", err)
 	}
 }
 
-// Broadcast message
-func broadcastMessage(msg Message) {
-	mutex.Lock()
-	conn, ok := connections[msg.ReceiverID]
-	mutex.Unlock()
+func forwardMessage(msg Message) {
+	clientsMux.Lock()
+	receiver, exists := clients[msg.ReceiverID]
+	clientsMux.Unlock()
 
-	if ok {
-		message, _ := json.Marshal(msg)
-		conn.WriteMessage(websocket.TextMessage, message)
+	if exists {
+		receiver.conn.WriteJSON(msg)
 	}
 }
 
-// Load messages with pagination
 func getMessagesHandler(w http.ResponseWriter, r *http.Request) {
-	senderID := r.URL.Query().Get("sender_id")
-	receiverID := r.URL.Query().Get("receiver_id")
-	limit := 10
-	offset, _ := strconv.Atoi(r.URL.Query().Get("offset"))
+	var userID1, userID2 int
+	fmt.Sscanf(r.URL.Query().Get("user1"), "%d", &userID1)
+	fmt.Sscanf(r.URL.Query().Get("user2"), "%d", &userID2)
 
-	rows, err := db.Query(`SELECT id, sender_id, receiver_id, content, sent_at FROM messages 
-		WHERE (sender_id = ? AND receiver_id = ?) OR (sender_id = ? AND receiver_id = ?) 
-		ORDER BY sent_at DESC LIMIT ? OFFSET ?`, senderID, receiverID, receiverID, senderID, limit, offset)
-
+	rows, err := db.Query("SELECT sender_id, receiver_id, content FROM messages WHERE (sender_id = ? AND receiver_id = ?) OR (sender_id = ? AND receiver_id = ?) ORDER BY sent_at", userID1, userID2, userID2, userID1)
 	if err != nil {
-		http.Error(w, "Error loading messages", http.StatusInternalServerError)
+		http.Error(w, "Database error", http.StatusInternalServerError)
 		return
 	}
 	defer rows.Close()
@@ -111,7 +105,7 @@ func getMessagesHandler(w http.ResponseWriter, r *http.Request) {
 	var messages []Message
 	for rows.Next() {
 		var msg Message
-		rows.Scan(&msg.ID, &msg.SenderID, &msg.ReceiverID, &msg.Content, &msg.SentAt)
+		rows.Scan(&msg.SenderID, &msg.ReceiverID, &msg.Content)
 		messages = append(messages, msg)
 	}
 
@@ -119,41 +113,14 @@ func getMessagesHandler(w http.ResponseWriter, r *http.Request) {
 	json.NewEncoder(w).Encode(messages)
 }
 
-// Get users with online status
-func getUsersHandler(w http.ResponseWriter, r *http.Request) {
-	rows, err := db.Query(`SELECT id, nickname FROM users ORDER BY nickname ASC`)
-	if err != nil {
-		http.Error(w, "Error loading users", http.StatusInternalServerError)
-		return
+func getOnlineUsers(w http.ResponseWriter, r *http.Request) {
+	clientsMux.Lock()
+	users := make([]int, 0, len(clients))
+	for id := range clients {
+		users = append(users, id)
 	}
-	defer rows.Close()
-
-	var users []map[string]interface{}
-	for rows.Next() {
-		var id int
-		var nickname string
-		rows.Scan(&id, &nickname)
-
-		mutex.Lock()
-		isOnline := onlineUsers[id]
-		mutex.Unlock()
-
-		users = append(users, map[string]interface{}{
-			"id":       id,
-			"nickname": nickname,
-			"online":   isOnline,
-		})
-	}
+	clientsMux.Unlock()
 
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(users)
-}
-
-// Message struct
-type Message struct {
-	ID         int    `json:"id"`
-	SenderID   int    `json:"sender_id"`
-	ReceiverID int    `json:"receiver_id"`
-	Content    string `json:"content"`
-	SentAt     string `json:"sent_at"`
 }
