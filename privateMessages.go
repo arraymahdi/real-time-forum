@@ -60,7 +60,15 @@ func handleConnections(w http.ResponseWriter, r *http.Request) {
 
 	log.Printf("User %d connected", userID)
 
-	// Ensure connection stays open
+	// Ensure client is removed on disconnect
+	defer func() {
+		clientsMux.Lock()
+		delete(clients, userID)
+		clientsMux.Unlock()
+		log.Printf("User %d disconnected", userID)
+	}()
+
+	// Keep connection open for messages
 	for {
 		var msg Message
 		err := conn.ReadJSON(&msg)
