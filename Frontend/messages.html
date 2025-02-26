@@ -16,17 +16,20 @@
         <button id="logout-btn">Logout</button>
     </header>
 
-    <main class="messages-container">
-        <h2>Private Messages</h2>
-        
-        <div id="messages-list">
-            <!-- Messages will load here -->
-        </div>
-
-        <div class="message-input">
-            <input type="text" id="message-content" placeholder="Type a message...">
-            <button onclick="sendMessage()">Send</button>
-        </div>
+    <main class="chat-container">
+        <aside class="users-list" id="users-list">
+            <!-- Users will be loaded here -->
+        </aside>
+        <section class="chat-box">
+            <h2 id="chat-header">Select a user to chat</h2>
+            <div id="messages-list" class="messages-list">
+                <!-- Messages will be loaded here -->
+            </div>
+            <div class="message-input">
+                <input type="text" id="message-content" placeholder="Type a message...">
+                <button id="send-btn">Send</button>
+            </div>
+        </section>
     </main>
 </body>
 </html>

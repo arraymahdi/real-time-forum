@@ -1,82 +1,143 @@
-/* Header styling */
+/* General Styles */
+body {
+    font-family: Arial, sans-serif;
+    margin: 0;
+    padding: 0;
+    background-color: #f5f5f5;
+}
+
+/* Fixed Header */
 header {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 60px; /* Ensure consistent height */
+    background-color: #007bff;
+    color: white;
+    padding: 10px 20px;
     display: flex;
     justify-content: space-between;
     align-items: center;
-    background: #333;
-    color: white;
-    padding: 10px 20px;
+    box-shadow: 0 2px 5px rgba(0, 0, 0, 0.1);
+    z-index: 1000;
 }
 
 header a {
-    text-decoration: none;
-    padding: 10px 15px;
     color: white;
-    border-radius: 5px;
-    transition: 0.3s;
-    font-size: 16px;
+    text-decoration: none;
+    margin-right: 10px;
 }
 
-#explore-posts-btn {
-    background: #007bff;
+header a.active {
+    font-weight: bold;
+    text-decoration: underline;
 }
 
-#messages-btn {
-    background: #28a745;
+/* Ensure content starts below the fixed header */
+main.chat-container {
+    display: flex;
+    height: calc(100vh - 60px); /* Adjust height after fixing header */
+    margin-top: 60px; /* Matches header height */
+    overflow: hidden;
 }
 
-#messages-btn.active {
-    background: #218838;
-}
-
-button#logout-btn {
-    background: red;
-    padding: 10px 15px;
-    border: none;
-    cursor: pointer;
-}
-
-/* Messages layout */
-.messages-container {
-    max-width: 600px;
-    margin: 20px auto;
-    padding: 20px;
+.users-list {
+    width: 20%;
     background: white;
-    box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
-    border-radius: 8px;
-}
-
-#messages-list {
-    max-height: 300px;
-    overflow-y: auto;
-    border: 1px solid #ccc;
     padding: 10px;
-    margin-bottom: 10px;
-    border-radius: 5px;
-    background: #f9f9f9;
+    border-right: 1px solid #ccc;
+    overflow-y: auto;
+    height: calc(100vh - 60px); /* Prevents being hidden under header */
+    padding-top: 50px; /* Adjust this value if needed */
 }
 
+/* Chatbox styles */
+.chat-box {
+    flex-grow: 1;
+    display: flex;
+    flex-direction: column;
+    overflow-y: hidden;
+}
+
+/* Messages area: latest message at bottom */
+.messages-list {
+    display: flex;
+    flex-direction: column; /* Keep natural order (new messages at bottom) */
+    overflow-y: auto;
+    flex-grow: 1;
+    height: calc(100vh - 150px); /* Adjust for header */
+    padding: 10px;
+    scroll-behavior: smooth;
+}
+
+
+
+/* Message bubble styles */
+.message {
+    padding: 8px;
+    margin-bottom: 5px;
+    border-radius: 5px;
+}
+
+.sent {
+    background-color: #007bff;
+    color: white;
+    align-self: flex-end;
+}
+
+.received {
+    background-color: #ddd;
+    color: black;
+    align-self: flex-start;
+}
+
+/* Input field fixed at bottom */
 .message-input {
     display: flex;
     gap: 10px;
+    padding: 10px;
+    background: white;
+    position: sticky;
+    bottom: 0;
+    width: 100%;
+    border-top: 1px solid #ccc;
 }
 
 .message-input input {
-    flex: 1;
-    padding: 10px;
+    flex-grow: 1;
+    padding: 8px;
     border: 1px solid #ccc;
     border-radius: 5px;
 }
 
 .message-input button {
-    padding: 10px 15px;
-    background: #007bff;
+    padding: 8px 15px;
+    background-color: #007bff;
     color: white;
     border: none;
-    cursor: pointer;
     border-radius: 5px;
+    cursor: pointer;
+    margin-right: 40px;
 }
 
 .message-input button:hover {
-    background: #0056b3;
+    background-color: #0056b3;
 }
+
+#logout-btn {
+    background-color: red;
+    color: white;
+    border: none;
+    padding: 8px 15px;
+    border-radius: 5px;
+    cursor: pointer;
+    transition: background-color 0.3s ease;
+    margin-right: 40px; /* Increased right margin */
+}
+
+#logout-btn:hover {
+    background-color: darkred;
+}
+
+

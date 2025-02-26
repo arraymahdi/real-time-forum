@@ -25,9 +25,13 @@ func main() {
 	http.HandleFunc("/comments", disableCORS(jwtMiddleware(createCommentHandler)))
 	http.HandleFunc("/comments/all", disableCORS(getCommentsHandler))
 
+
 	http.HandleFunc("/ws", disableCORS(handleConnections))
 	http.HandleFunc("/messages", disableCORS(getMessagesHandler))
 	http.HandleFunc("/online", disableCORS(getOnlineUsers))
+
+	http.HandleFunc("/users", disableCORS(getAllUsersHandler))
+	
 
 	fmt.Println("Server running on port 8088")
 	log.Fatal(http.ListenAndServe(":8088", nil))

@@ -87,6 +87,11 @@ func handleConnections(w http.ResponseWriter, r *http.Request) {
 			log.Println("Read error:", err)
 			break // Close connection if read fails
 		}
+
+		// Ensure sender ID is set to the authenticated user
+		msg.SenderID = userID
+
+		// Save and forward the message
 		saveMessage(msg)
 		forwardMessage(msg)
 	}

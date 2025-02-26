@@ -131,3 +131,30 @@ func ExtractUserIDFromToken(tokenString string) (int, error) {
 	}
 	return 0, errors.New("invalid token")
 }
+
+func getAllUsersHandler(w http.ResponseWriter, r *http.Request) {
+	rows, err := db.Query("SELECT id, nickname, email FROM users")
+	if err != nil {
+		http.Error(w, "Failed to fetch users", http.StatusInternalServerError)
+		return
+	}
+	defer rows.Close()
+
+	var users []map[string]interface{}
+	for rows.Next() {
+		var id int
+		var nickname, email string
+		if err := rows.Scan(&id, &nickname, &email); err != nil {
+			http.Error(w, "Error scanning user", http.StatusInternalServerError)
+			return
+		}
+		users = append(users, map[string]interface{}{
+			"id":       id,
+			"nickname": nickname,
+			"email":    email,
+		})
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(users)
+}
