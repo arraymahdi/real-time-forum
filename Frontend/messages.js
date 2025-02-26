@@ -136,6 +136,6 @@ document.addEventListener("DOMContentLoaded", function () {
 
 function logout() {
     localStorage.removeItem("token"); // Remove auth token
-    window.location.href = "login.html"; // Redirect to login page
+    window.location.href = "auth.html"; // Redirect to login page
 }
 

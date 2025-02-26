@@ -4,134 +4,87 @@ body {
     margin: 0;
     padding: 0;
     background-color: #f5f5f5;
-}
-
-header {
     display: flex;
-    justify-content: space-between;
+    justify-content: center;
     align-items: center;
-    padding: 15px;
-    background-color: #007bff;
-    color: white;
+    height: 100vh;
 }
 
-header a {
-    color: white;
-    text-decoration: none;
-    margin-right: 15px;
-}
-
-header a.active {
-    font-weight: bold;
-    text-decoration: underline;
-}
-
-/* Chat Layout */
-.chat-container {
-    display: flex;
-    height: 90vh;
-}
-
-/* Users List */
-.users-list {
-    width: 25%;
+/* Auth Containers */
+.auth-container, .modal-content {
     background: white;
-    padding: 15px;
-    border-right: 2px solid #ccc;
-    overflow-y: auto;
-}
-
-.user-item {
-    display: flex;
-    align-items: center;
-    padding: 12px;
-    border-bottom: 1px solid #eee;
-    cursor: pointer;
-    transition: background 0.3s;
-}
-
-.user-item:hover {
-    background-color: #f0f0f0;
-}
-
-.status-dot {
-    width: 12px;
-    height: 12px;
-    border-radius: 50%;
-    margin-right: 10px;
-}
-
-.online {
-    background-color: green;
-}
-
-.offline {
-    background-color: gray;
-}
-
-/* Chat Box */
-.chat-box {
-    flex-grow: 1;
-    display: flex;
-    flex-direction: column;
-    justify-content: space-between;
     padding: 20px;
-}
-
-#messages-list {
-    flex-grow: 1;
-    overflow-y: auto;
-    padding-bottom: 10px;
-    max-height: 70vh;
-}
-
-/* Message Styling */
-.message {
-    padding: 10px;
-    margin: 8px 0;
     border-radius: 8px;
-    max-width: 70%;
+    box-shadow: 0px 4px 10px rgba(0, 0, 0, 0.1);
+    width: 90%;  /* Adjust for small screens */
+    max-width: 350px; /* Prevents it from being too large */
+    text-align: center;
+    box-sizing: border-box; /* Fixes width calculation */
 }
 
-.sent {
-    background-color: #007bff;
-    color: white;
-    align-self: flex-end;
+.auth-container h2, .modal-content h2 {
+    margin-bottom: 15px;
 }
 
-.received {
-    background-color: #ddd;
-    color: black;
-    align-self: flex-start;
-}
-
-/* Message Input */
-.message-input {
-    display: flex;
-    gap: 10px;
+input, select {
+    width: 100%;
+    max-width: 100%; /* Ensures no overflow */
     padding: 10px;
-    background: white;
-    border-top: 1px solid #ccc;
-}
-
-.message-input input {
-    flex-grow: 1;
-    padding: 10px;
+    margin: 10px 0;
     border: 1px solid #ccc;
     border-radius: 5px;
-    font-size: 16px;
+    box-sizing: border-box; /* Prevents overflow */
 }
 
-.message-input button {
-    padding: 10px 15px;
+button {
+    width: 100%;
+    padding: 10px;
     background-color: #007bff;
     color: white;
     border: none;
     border-radius: 5px;
     cursor: pointer;
-    font-size: 16px;
+    transition: background-color 0.3s;
 }
 
-.message-input button:hover {
+button:hover {
     background-color: #0056b3;
+}
+
+/* Sign Up Modal */
+.modal {
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background: rgba(0, 0, 0, 0.5);
+}
+
+/* Hide Modal Initially */
+.hidden {
+    display: none;
+}
+
+.modal-content {
+    position: relative;
+    width: 90%; /* Adjust for mobile */
+    max-width: 350px; /* Keep it contained */
+    background: white;
+    padding: 20px;
+    border-radius: 8px;
+    box-shadow: 0px 4px 10px rgba(0, 0, 0, 0.1);
+    box-sizing: border-box; /* Fixes width issues */
+}
+
+/* Close Button */
+.close {
+    position: absolute;
+    top: 10px;
+    right: 15px;
+    font-size: 24px;
+    cursor: pointer;
 }
