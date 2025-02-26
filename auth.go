@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"net/http"
 	"time"
+	"errors"
 
 	"github.com/golang-jwt/jwt/v5"
 	"golang.org/x/crypto/bcrypt"
@@ -31,10 +32,11 @@ type User struct {
 
 var jwtSecret = []byte("your-secret-key")
 
-func generateJWT(email string) (string, error) {
+func generateJWT(userID int, email string) (string, error) {
 	token := jwt.NewWithClaims(jwt.SigningMethodHS256, jwt.MapClaims{
-		"email": email,
-		"exp":   time.Now().Add(time.Hour * 24).Unix(),
+		"user_id": userID,
+		"email":   email,
+		"exp":     time.Now().Add(time.Hour * 24).Unix(),
 	})
 
 	return token.SignedString(jwtSecret)
@@ -91,7 +93,7 @@ func loginHandler(w http.ResponseWriter, r *http.Request) {
 	}
 
 	var storedPassword string
-	err := db.QueryRow("SELECT password FROM users WHERE email = ? OR nickname = ?", user.Email, user.Nickname).Scan(&storedPassword)
+	err := db.QueryRow("SELECT id, password FROM users WHERE email = ? OR nickname = ?", user.Email, user.Nickname).Scan(&user.ID, &storedPassword)
 	if err != nil {
 		http.Error(w, "Invalid credentials", http.StatusUnauthorized)
 		return
@@ -102,7 +104,7 @@ func loginHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	token, err := generateJWT(user.Email)
+	token, err := generateJWT(user.ID, user.Email)
 	if err != nil {
 		http.Error(w, "Error generating token", http.StatusInternalServerError)
 		return
@@ -110,4 +112,22 @@ func loginHandler(w http.ResponseWriter, r *http.Request) {
 
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(map[string]string{"token": token})
+}
+
+func ExtractUserIDFromToken(tokenString string) (int, error) {
+	// Parse the token
+	token, err := jwt.Parse(tokenString, func(token *jwt.Token) (interface{}, error) {
+		return jwtSecret, nil
+	})
+	if err != nil {
+		return 0, err
+	}
+
+	// Extract claims
+	if claims, ok := token.Claims.(jwt.MapClaims); ok && token.Valid {
+		if userID, ok := claims["user_id"].(float64); ok {
+			return int(userID), nil
+		}
+	}
+	return 0, errors.New("invalid token")
 }

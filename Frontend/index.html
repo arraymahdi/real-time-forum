@@ -1,0 +1,48 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Forum Home</title>
+    <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+    <header>
+        <h1>Forum</h1>
+        <button id="create-post-btn">+ Create Post</button>
+        <a href="messages.html" id="messages-btn">💬 Messages</a>
+        <button id="logout-btn">Logout</button>
+    </header>
+    
+
+    <div id="posts-container"></div>
+
+    <!-- Improved Modal -->
+    <div id="create-post-modal" class="modal" style="display: none;">
+        <div class="modal-content">
+            <h2>Create Post</h2>
+            <input type="text" id="post-title" placeholder="Title" required>
+            <input type="text" id="post-category" placeholder="Category">
+            <textarea id="post-content" placeholder="Write your post..." required></textarea>
+            <input type="file" id="post-image" accept="image/*">
+            <input type="file" id="post-video" accept="video/*">
+            <button id="post-btn">Post</button>
+        </div>
+    </div>
+    
+    
+
+    <!-- View Post Modal -->
+    <div id="view-post-modal" class="modal" style="display: none;">
+        <div class="modal-content">
+            <h2 id="modal-title"></h2>
+            <p id="modal-author"></p>
+            <p id="modal-content"></p>
+            <img id="modal-image" style="display: none; max-width: 100%;" alt="Post Image">
+            <video id="modal-video" style="display: none; max-width: 100%;" controls></video>
+        </div>
+    </div>
+
+    <script src="forum.js"></script>
+</body>
+</html>

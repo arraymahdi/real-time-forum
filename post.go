@@ -2,7 +2,9 @@ package main
 
 import (
 	"encoding/json"
+	"database/sql"
 	"fmt"
+	"log"
 	"io"
 	"net/http"
 	"os"
@@ -91,12 +93,14 @@ func saveFile(r *http.Request, fieldName, uploadDir string) (string, error) {
 }
 
 func createPostHandler(w http.ResponseWriter, r *http.Request) {
+	println("try")
 	if r.Method != http.MethodPost {
 		http.Error(w, "Invalid request method", http.StatusMethodNotAllowed)
 		return
 	}
 
 	userEmail := r.Header.Get("User-Email")
+	println(userEmail)
 	if userEmail == "" {
 		http.Error(w, "Unauthorized", http.StatusUnauthorized)
 		return
@@ -137,27 +141,91 @@ func createPostHandler(w http.ResponseWriter, r *http.Request) {
 }
 
 func getPostsHandler(w http.ResponseWriter, r *http.Request) {
-	rows, err := db.Query("SELECT id, user_id, title, content, category, image_path, video_path, created_at FROM posts ORDER BY created_at DESC")
+	rows, err := db.Query(`
+        SELECT posts.id, posts.user_id, posts.title, posts.content, posts.category, 
+               posts.image_path, posts.video_path, posts.created_at, users.nickname 
+        FROM posts
+        JOIN users ON posts.user_id = users.id
+        ORDER BY posts.created_at DESC
+    `)
 	if err != nil {
 		http.Error(w, "Error retrieving posts", http.StatusInternalServerError)
 		return
 	}
 	defer rows.Close()
 
-	var posts []Post
+	var posts []struct {
+		Post
+		Nickname string `json:"nickname"`
+	}
+	
 	for rows.Next() {
 		var post Post
-		err := rows.Scan(&post.ID, &post.UserID, &post.Title, &post.Content, &post.Category, &post.ImagePath, &post.VideoPath, &post.CreatedAt)
+		var nickname string
+		err := rows.Scan(&post.ID, &post.UserID, &post.Title, &post.Content, &post.Category, &post.ImagePath, &post.VideoPath, &post.CreatedAt, &nickname)
 		if err != nil {
 			http.Error(w, "Error scanning posts", http.StatusInternalServerError)
 			return
 		}
-		posts = append(posts, post)
+
+		posts = append(posts, struct {
+			Post
+			Nickname string `json:"nickname"`
+		}{post, nickname})
 	}
 
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(posts)
 }
+
+func GetPostByIDHandler(w http.ResponseWriter, r *http.Request) {
+	// Extract post ID from URL
+	postID := strings.TrimPrefix(r.URL.Path, "/post/")
+	if postID == "" {
+		http.Error(w, "Post ID is required", http.StatusBadRequest)
+		return
+	}
+
+	var post Post
+	var nickname string
+
+	// Fetch post and user nickname
+	err := db.QueryRow(`
+		SELECT p.id, p.user_id, p.title, p.content, p.category, p.image_path, p.video_path, p.created_at, u.nickname
+		FROM posts p
+		JOIN users u ON p.user_id = u.id
+		WHERE p.id = ?`, postID).
+		Scan(&post.ID, &post.UserID, &post.Title, &post.Content, &post.Category, &post.ImagePath, &post.VideoPath, &post.CreatedAt, &nickname)
+
+	if err == sql.ErrNoRows {
+		http.Error(w, "Post not found", http.StatusNotFound)
+		return
+	} else if err != nil {
+		log.Println("Database error:", err)
+		http.Error(w, "Server error", http.StatusInternalServerError)
+		return
+	}
+
+	// Construct response
+	response := map[string]interface{}{
+		"id":         post.ID,
+		"user_id":    post.UserID,
+		"title":      post.Title,
+		"content":    post.Content,
+		"category":   post.Category,
+		"image_path": post.ImagePath,
+		"video_path": post.VideoPath,
+		"created_at": post.CreatedAt,
+		"nickname":   nickname,
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(response)
+}
+
+
+
+
 
 
 

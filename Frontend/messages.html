@@ -1,0 +1,32 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Messages</title>
+    <link rel="stylesheet" href="messages.css">
+    <script src="auth.js" defer></script>
+    <script src="messages.js" defer></script>
+</head>
+<body>
+    <header>
+        <h1>Forum</h1>
+        <a href="index.html" id="explore-posts-btn">📰 Posts Explorer</a>
+        <a href="messages.html" id="messages-btn" class="active">💬 Messages</a>
+        <button id="logout-btn">Logout</button>
+    </header>
+
+    <main class="messages-container">
+        <h2>Private Messages</h2>
+        
+        <div id="messages-list">
+            <!-- Messages will load here -->
+        </div>
+
+        <div class="message-input">
+            <input type="text" id="message-content" placeholder="Type a message...">
+            <button onclick="sendMessage()">Send</button>
+        </div>
+    </main>
+</body>
+</html>

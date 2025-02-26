@@ -1,0 +1,82 @@
+/* Header styling */
+header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    background: #333;
+    color: white;
+    padding: 10px 20px;
+}
+
+header a {
+    text-decoration: none;
+    padding: 10px 15px;
+    color: white;
+    border-radius: 5px;
+    transition: 0.3s;
+    font-size: 16px;
+}
+
+#explore-posts-btn {
+    background: #007bff;
+}
+
+#messages-btn {
+    background: #28a745;
+}
+
+#messages-btn.active {
+    background: #218838;
+}
+
+button#logout-btn {
+    background: red;
+    padding: 10px 15px;
+    border: none;
+    cursor: pointer;
+}
+
+/* Messages layout */
+.messages-container {
+    max-width: 600px;
+    margin: 20px auto;
+    padding: 20px;
+    background: white;
+    box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+    border-radius: 8px;
+}
+
+#messages-list {
+    max-height: 300px;
+    overflow-y: auto;
+    border: 1px solid #ccc;
+    padding: 10px;
+    margin-bottom: 10px;
+    border-radius: 5px;
+    background: #f9f9f9;
+}
+
+.message-input {
+    display: flex;
+    gap: 10px;
+}
+
+.message-input input {
+    flex: 1;
+    padding: 10px;
+    border: 1px solid #ccc;
+    border-radius: 5px;
+}
+
+.message-input button {
+    padding: 10px 15px;
+    background: #007bff;
+    color: white;
+    border: none;
+    cursor: pointer;
+    border-radius: 5px;
+}
+
+.message-input button:hover {
+    background: #0056b3;
+}

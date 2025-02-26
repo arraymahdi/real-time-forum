@@ -1,0 +1,41 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Login</title>
+    <link rel="stylesheet" href="auth.css">
+    <script src="auth.js" defer></script>
+</head>
+<body>
+
+    <div class="auth-container">
+        <h2>Login</h2>
+        <input type="text" id="login-username" placeholder="Email or Nickname">
+        <input type="password" id="login-password" placeholder="Password">
+        <button onclick="login()">Login</button>
+        <p>Don't have an account? <a href="#" id="open-signup">Sign up</a></p>
+    </div>
+
+    <!-- Signup Modal -->
+    <div id="signup-modal" class="modal">
+        <div class="modal-content">
+            <span class="close" id="close-signup">&times;</span>
+            <h2>Sign Up</h2>
+            <input type="text" id="register-nickname" placeholder="Nickname">
+            <input type="number" id="register-age" placeholder="Age">
+            <select id="register-gender">
+                <option value="Male">Male</option>
+                <option value="Female">Female</option>
+                <option value="Other">Other</option>
+            </select>
+            <input type="text" id="register-first-name" placeholder="First Name">
+            <input type="text" id="register-last-name" placeholder="Last Name">
+            <input type="email" id="register-email" placeholder="Email">
+            <input type="password" id="register-password" placeholder="Password">
+            <button onclick="register()">Register</button>
+        </div>
+    </div>
+
+</body>
+</html>

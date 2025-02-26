@@ -34,6 +34,7 @@ var (
 )
 
 func handleConnections(w http.ResponseWriter, r *http.Request) {
+	// Upgrade connection
 	conn, err := upgrader.Upgrade(w, r, nil)
 	if err != nil {
 		log.Println("WebSocket upgrade error:", err)
@@ -41,24 +42,31 @@ func handleConnections(w http.ResponseWriter, r *http.Request) {
 	}
 	defer conn.Close()
 
-	// Read user ID as JSON
-	var user struct {
-		UserID int `json:"user_id"`
+	// Read token from client
+	var authData struct {
+		Token string `json:"token"`
 	}
-	err = conn.ReadJSON(&user)
+	err = conn.ReadJSON(&authData)
 	if err != nil {
-		log.Println("Failed to read user ID:", err)
+		log.Println("Failed to read authentication data:", err)
+		conn.WriteJSON(map[string]string{"error": "Invalid token data"})
 		return
 	}
 
-	userID := user.UserID
+	// Extract user ID from the token
+	userID, err := ExtractUserIDFromToken(authData.Token)
+	if err != nil {
+		log.Println("Invalid token:", err)
+		conn.WriteJSON(map[string]string{"error": "Unauthorized"})
+		return
+	}
 
 	// Register client
 	clientsMux.Lock()
 	clients[userID] = &Client{conn: conn, id: userID}
 	clientsMux.Unlock()
 
-	log.Printf("User %d connected", userID)
+	log.Printf("User %d connected via WebSocket", userID)
 
 	// Ensure client is removed on disconnect
 	defer func() {
@@ -67,6 +75,9 @@ func handleConnections(w http.ResponseWriter, r *http.Request) {
 		clientsMux.Unlock()
 		log.Printf("User %d disconnected", userID)
 	}()
+
+	// Send confirmation to the client
+	conn.WriteJSON(map[string]string{"status": "connected", "user_id": fmt.Sprintf("%d", userID)})
 
 	// Keep connection open for messages
 	for {
@@ -80,6 +91,7 @@ func handleConnections(w http.ResponseWriter, r *http.Request) {
 		forwardMessage(msg)
 	}
 }
+
 
 func saveMessage(msg Message) {
 	_, err := db.Exec("INSERT INTO messages (sender_id, receiver_id, content) VALUES (?, ?, ?)", msg.SenderID, msg.ReceiverID, msg.Content)
