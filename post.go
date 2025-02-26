@@ -1,18 +1,17 @@
 package main
 
 import (
-	"encoding/json"
 	"database/sql"
+	"encoding/json"
+	"errors"
 	"fmt"
-	"log"
 	"io"
+	"log"
 	"net/http"
 	"os"
 	"path/filepath"
 	"strings"
 	"time"
-
-	"github.com/golang-jwt/jwt/v5"
 )
 
 // Structs
@@ -29,7 +28,46 @@ type Post struct {
 
 var uploadDir = "uploads"
 
-// Middleware for JWT authentication
+// ExtractEmailFromToken extracts the email from a manually created JWT.
+func ExtractEmailFromToken(tokenString string) (string, error) {
+	parts := strings.Split(tokenString, ".")
+	if len(parts) != 3 {
+		return "", errors.New("invalid token format")
+	}
+
+	headerPayload := parts[0] + "." + parts[1]
+
+	// Decode and verify the signature
+	signature, err := base64Decode(parts[2])
+	if err != nil {
+		return "", errors.New("invalid token signature encoding")
+	}
+
+	if !verifyHMACSHA256([]byte(headerPayload), jwtSecret, signature) {
+		return "", errors.New("invalid token signature")
+	}
+
+	// Decode the payload
+	payloadJSON, err := base64Decode(parts[1])
+	if err != nil {
+		return "", errors.New("invalid token payload encoding")
+	}
+
+	// Parse JSON and extract email
+	var claims map[string]interface{}
+	if err := json.Unmarshal(payloadJSON, &claims); err != nil {
+		return "", errors.New("invalid token payload")
+	}
+
+	email, ok := claims["email"].(string)
+	if !ok {
+		return "", errors.New("email not found in token")
+	}
+
+	return email, nil
+}
+
+// Middleware for JWT authentication without using jwt package
 func jwtMiddleware(next http.HandlerFunc) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		tokenString := r.Header.Get("Authorization")
@@ -39,23 +77,14 @@ func jwtMiddleware(next http.HandlerFunc) http.HandlerFunc {
 		}
 
 		tokenString = strings.TrimPrefix(tokenString, "Bearer ")
-		claims := jwt.MapClaims{}
-		token, err := jwt.ParseWithClaims(tokenString, claims, func(token *jwt.Token) (interface{}, error) {
-			return jwtSecret, nil
-		})
 
-		if err != nil || !token.Valid {
+		email, err := ExtractEmailFromToken(tokenString)
+		if err != nil {
 			http.Error(w, "Invalid token", http.StatusUnauthorized)
 			return
 		}
 
-		email, ok := claims["email"].(string)
-		if !ok {
-			http.Error(w, "Invalid token payload", http.StatusUnauthorized)
-			return
-		}
-
-		// Store user email in request context
+		// Store user email in request header
 		r.Header.Set("User-Email", email)
 		next(w, r)
 	}
@@ -158,7 +187,7 @@ func getPostsHandler(w http.ResponseWriter, r *http.Request) {
 		Post
 		Nickname string `json:"nickname"`
 	}
-	
+
 	for rows.Next() {
 		var post Post
 		var nickname string
@@ -222,10 +251,3 @@ func GetPostByIDHandler(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(response)
 }
-
-
-
-
-
-
-
