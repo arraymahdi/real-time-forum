@@ -92,10 +92,13 @@ document.addEventListener("DOMContentLoaded", () => {
         msgDiv.classList.add("message", isSender ? "sent" : "received");
         msgDiv.textContent = msg.content;
         messageList.appendChild(msgDiv);
-        messageList.scrollTop = messageList.scrollHeight; // Auto-scroll
+
+        // Auto-scroll to the latest message
+        setTimeout(() => {
+            messageList.scrollTop = messageList.scrollHeight;
+        }, 100);
     }
 
-    // 🔥 Fix: Make sure event listeners are properly attached
     document.addEventListener("click", (event) => {
         if (event.target.id === "send-btn") {
             sendMessage();
@@ -117,7 +120,6 @@ document.addEventListener("DOMContentLoaded", () => {
                 content: message,
             };
 
-            console.log("Sending message:", msgData);
             socket.send(JSON.stringify(msgData));
             displayMessage(msgData, true);
             messageInput.value = "";
@@ -135,7 +137,6 @@ document.addEventListener("DOMContentLoaded", function () {
 });
 
 function logout() {
-    localStorage.removeItem("token"); // Remove auth token
-    window.location.href = "auth.html"; // Redirect to login page
+    localStorage.removeItem("token");
+    window.location.href = "auth.html";
 }
-
