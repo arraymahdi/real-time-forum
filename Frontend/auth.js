@@ -112,60 +112,6 @@ async function register() {
     }
 }
 
-function checkAuth() {
-    const token = localStorage.getItem("token");
-
-    if (!token) {
-        // Show login, hide everything else
-        document.getElementById("auth-section").style.display = "block";
-        document.getElementById("forum-section").style.display = "none";
-        document.getElementById("messages-section").style.display = "none";
-    } else {
-        // Show forum by default, hide login
-        document.getElementById("auth-section").style.display = "none";
-        document.getElementById("forum-section").style.display = "block";
-        document.getElementById("messages-section").style.display = "none";
-    }
-}
-
-document.addEventListener("DOMContentLoaded", () => {
-    checkAuth();
-
-    const messagesBtn = document.getElementById("messages-btn");
-    const forumBtn = document.getElementById("forum-btn");
-
-    if (messagesBtn) {
-        messagesBtn.addEventListener("click", () => {
-            document.getElementById("forum-section").style.display = "none";
-            document.getElementById("messages-section").style.display = "block";
-        });
-    }
-
-    if (forumBtn) {
-        forumBtn.addEventListener("click", () => {
-            document.getElementById("messages-section").style.display = "none";
-            document.getElementById("forum-section").style.display = "block";
-        });
-    }
-});
-
-document.addEventListener("DOMContentLoaded", () => {
-    const forumSection = document.getElementById("forum-section");
-    const messagesSection = document.getElementById("messages-section");
-    const messagesBtn = document.getElementById("messages-btn");
-    const explorePostsBtn = document.getElementById("explore-posts-btn");
-
-    messagesBtn.addEventListener("click", () => {
-        forumSection.style.display = "none";
-        messagesSection.style.display = "block";
-    });
-
-    explorePostsBtn.addEventListener("click", () => {
-        messagesSection.style.display = "none";
-        forumSection.style.display = "block";
-    });
-});
-
 // Fix logout to stay in test.html
 function logout() {
     localStorage.removeItem("token");

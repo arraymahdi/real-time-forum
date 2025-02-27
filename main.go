@@ -23,7 +23,7 @@ func main() {
 	http.HandleFunc("/posts/all", disableCORS(getPostsHandler))
 	http.HandleFunc("/post/", disableCORS(GetPostByIDHandler)) 
 	http.HandleFunc("/comments", disableCORS(jwtMiddleware(createCommentHandler)))
-	http.HandleFunc("/comments/all", disableCORS(getCommentsHandler))
+	http.HandleFunc("/comments/all", disableCORS(getCommentsByPostHandler))
 
 
 	http.HandleFunc("/ws", disableCORS(handleConnections))

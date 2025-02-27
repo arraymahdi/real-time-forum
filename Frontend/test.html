@@ -8,6 +8,7 @@
     <script src="auth.js" defer></script>
     <script src="forum.js" defer></script>
     <script src="messages.js" defer></script>
+    <script src="navigation.js" defer></script>
 </head>
 <body>
 
@@ -74,15 +75,24 @@
                 <p id="modal-content"></p>
                 <img id="modal-image" style="display: none; max-width: 100%;" alt="Post Image">
                 <video id="modal-video" style="display: none; max-width: 100%;" controls></video>
+        
+                <!-- Comments Section -->
+                <div class="comments-section">
+                    <h3>Comments</h3>
+                    <div id="comments-container" class="comments-container"></div>
+                    <textarea id="comment-input" class="comment-input" placeholder="Write a comment..."></textarea>
+                    <button id="submit-comment" class="comment-button">Post Comment</button>
+                </div>
             </div>
         </div>
     </div>
 
-    <!-- Messages Section -->
+    <!-- Messages Section (Initially Hidden) -->
     <div id="messages-section" style="display: none;">
         <header>
             <h1>Forum</h1>
-            <button id="back-to-forum-btn">📰 Posts Explorer</button>
+            <a href="javascript:void(0)" id="explore-posts-btn">📰 Posts Explorer</a>
+            <a href="javascript:void(0)" id="messages-btn" class="active">💬 Messages</a>
             <button id="logout-btn">Logout</button>
         </header>
 
@@ -102,38 +112,5 @@
             </section>
         </main>
     </div>
-
-    <script>
-        document.addEventListener("DOMContentLoaded", () => {
-            const forumSection = document.getElementById("forum-section");
-            const messagesSection = document.getElementById("messages-section");
-            const messagesBtn = document.getElementById("messages-btn");
-            const backToForumBtn = document.getElementById("back-to-forum-btn");
-
-            // Function to switch to messages
-            messagesBtn.addEventListener("click", () => {
-                forumSection.style.display = "none";
-                messagesSection.style.display = "block";
-            });
-
-            // Function to switch back to forum
-            backToForumBtn.addEventListener("click", () => {
-                messagesSection.style.display = "none";
-                forumSection.style.display = "block";
-            });
-
-            // Show forum by default after login
-            function showForum() {
-                document.getElementById("auth-section").style.display = "none";
-                forumSection.style.display = "block";
-            }
-
-            // Check if user is already logged in
-            if (localStorage.getItem("token")) {
-                showForum();
-            }
-        });
-    </script>
-
 </body>
 </html>
