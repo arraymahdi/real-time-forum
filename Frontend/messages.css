@@ -166,3 +166,11 @@ main.chat-container {
 #logout-btn:hover {
     background-color: darkred;
 }
+
+.timestamp {
+    display: block;
+    font-size: 0.75rem;
+    color: rgb(241, 240, 240);
+    text-align: left;
+    margin-top: 2px;
+}

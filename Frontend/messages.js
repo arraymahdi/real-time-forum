@@ -72,17 +72,52 @@ document.addEventListener("DOMContentLoaded", () => {
         });
     }
 
-    async function loadMessages(receiverID) {
+    let messages = []; // Store all messages
+    let offset = 0;
+    const limit = 10;
+    let loading = false;
+
+    async function loadMessages(receiverID, initialLoad = true) {
         selectedReceiverID = receiverID;
+        offset = 0; // Reset offset on new chat
+        messages = []; // Clear stored messages
+
         document.getElementById("messages-list").innerHTML = "";
+        await fetchMessages(initialLoad);
+    }
+
+    async function fetchMessages(initialLoad = false) {
+        if (loading) return;
+        loading = true;
 
         try {
-            const response = await fetch(`http://localhost:8088/messages?user1=${currentUserID}&user2=${receiverID}`);
-            const messages = await response.json();
+            const response = await fetch(`http://localhost:8088/messages?user1=${currentUserID}&user2=${selectedReceiverID}&offset=${offset}`);
+            const newMessages = await response.json();
 
-            messages.forEach(msg => displayMessage(msg, msg.sender_id === currentUserID));
+            if (newMessages.length > 0) {
+                messages = [...newMessages.reverse(), ...messages]; // Add at the beginning
+                offset += newMessages.length;
+                renderMessages(initialLoad);
+            }
         } catch (error) {
             console.error("Failed to load messages:", error);
+        } finally {
+            loading = false;
+        }
+    }
+
+    function renderMessages(initialLoad = false) {
+        const messageList = document.getElementById("messages-list");
+        const prevScrollHeight = messageList.scrollHeight;
+
+        messageList.innerHTML = ""; // Clear and re-render
+
+        messages.forEach(msg => displayMessage(msg, msg.sender_id === currentUserID));
+
+        if (initialLoad) {
+            messageList.scrollTop = messageList.scrollHeight; // Scroll to bottom on first load
+        } else {
+            messageList.scrollTop = messageList.scrollHeight - prevScrollHeight; // Maintain position
         }
     }
 
@@ -90,14 +125,31 @@ document.addEventListener("DOMContentLoaded", () => {
         const messageList = document.getElementById("messages-list");
         const msgDiv = document.createElement("div");
         msgDiv.classList.add("message", isSender ? "sent" : "received");
-        msgDiv.textContent = msg.content;
+    
+        const text = document.createElement("p");
+        text.textContent = msg.content;
+    
+        const timestamp = document.createElement("span");
+        timestamp.classList.add("timestamp");
+    
+        // Fix invalid date issue by ensuring it's properly formatted
+        const sentAt = msg.sent_at ? new Date(msg.sent_at).toLocaleString() : "Sending...";
+        timestamp.textContent = sentAt;
+    
+        msgDiv.appendChild(text);
+        msgDiv.appendChild(timestamp);
         messageList.appendChild(msgDiv);
-
-        // Auto-scroll to the latest message
-        setTimeout(() => {
-            messageList.scrollTop = messageList.scrollHeight;
-        }, 100);
     }
+    
+
+    // Scroll event to load more messages
+    document.getElementById("messages-list").addEventListener("scroll", function () {
+        if (this.scrollTop === 0) {
+            fetchMessages();
+        }
+    });
+
+    
 
     document.addEventListener("click", (event) => {
         if (event.target.id === "send-btn") {

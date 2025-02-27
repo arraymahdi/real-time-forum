@@ -6,6 +6,7 @@ import (
 	"log"
 	"net/http"
 	"sync"
+	"time"
 
 	"github.com/gorilla/websocket"
 	_ "github.com/mattn/go-sqlite3"
@@ -21,6 +22,7 @@ type Message struct {
 	SenderID   int    `json:"sender_id"`
 	ReceiverID int    `json:"receiver_id"`
 	Content    string `json:"content"`
+	SentAt     string `json:"sent_at"`
 }
 
 type Client struct {
@@ -90,6 +92,7 @@ func handleConnections(w http.ResponseWriter, r *http.Request) {
 
 		// Ensure sender ID is set to the authenticated user
 		msg.SenderID = userID
+		msg.SentAt = time.Now().Format(time.RFC3339)
 
 		// Save and forward the message
 		saveMessage(msg)
@@ -97,9 +100,8 @@ func handleConnections(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
-
 func saveMessage(msg Message) {
-	_, err := db.Exec("INSERT INTO messages (sender_id, receiver_id, content) VALUES (?, ?, ?)", msg.SenderID, msg.ReceiverID, msg.Content)
+	_, err := db.Exec("INSERT INTO messages (sender_id, receiver_id, content, sent_at) VALUES (?, ?, ?, ?)", msg.SenderID, msg.ReceiverID, msg.Content, msg.SentAt)
 	if err != nil {
 		log.Println("Failed to save message:", err)
 	}
@@ -111,16 +113,25 @@ func forwardMessage(msg Message) {
 	clientsMux.Unlock()
 
 	if exists {
+		msg.SentAt = time.Now().Format(time.RFC3339) // Ensure correct timestamp before sending
 		receiver.conn.WriteJSON(msg)
 	}
 }
 
+
 func getMessagesHandler(w http.ResponseWriter, r *http.Request) {
-	var userID1, userID2 int
+	var userID1, userID2, offset int
 	fmt.Sscanf(r.URL.Query().Get("user1"), "%d", &userID1)
 	fmt.Sscanf(r.URL.Query().Get("user2"), "%d", &userID2)
+	fmt.Sscanf(r.URL.Query().Get("offset"), "%d", &offset) // Offset for pagination
 
-	rows, err := db.Query("SELECT sender_id, receiver_id, content FROM messages WHERE (sender_id = ? AND receiver_id = ?) OR (sender_id = ? AND receiver_id = ?) ORDER BY sent_at", userID1, userID2, userID2, userID1)
+	rows, err := db.Query(`
+		SELECT sender_id, receiver_id, content, sent_at 
+		FROM messages 
+		WHERE (sender_id = ? AND receiver_id = ?) OR (sender_id = ? AND receiver_id = ?) 
+		ORDER BY sent_at DESC 
+		LIMIT 10 OFFSET ?`, userID1, userID2, userID2, userID1, offset)
+
 	if err != nil {
 		http.Error(w, "Database error", http.StatusInternalServerError)
 		return
@@ -130,8 +141,11 @@ func getMessagesHandler(w http.ResponseWriter, r *http.Request) {
 	var messages []Message
 	for rows.Next() {
 		var msg Message
-		rows.Scan(&msg.SenderID, &msg.ReceiverID, &msg.Content)
-		messages = append(messages, msg)
+		var sentAt time.Time
+		if err := rows.Scan(&msg.SenderID, &msg.ReceiverID, &msg.Content, &sentAt); err == nil {
+			msg.SentAt = sentAt.Format(time.RFC3339)
+			messages = append(messages, msg)
+		}
 	}
 
 	w.Header().Set("Content-Type", "application/json")
