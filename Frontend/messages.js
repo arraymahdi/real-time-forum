@@ -1,10 +1,5 @@
 document.addEventListener("DOMContentLoaded", () => {
     const token = localStorage.getItem("token");
-    if (!token) {
-        alert("You need to log in first!");
-        window.location.href = "login.html";
-        return;
-    }
 
     const socket = new WebSocket("ws://localhost:8088/ws");
     let currentUserID = null;
@@ -182,13 +177,12 @@ document.addEventListener("DOMContentLoaded", () => {
 });
 
 document.addEventListener("DOMContentLoaded", function () {
-    const logoutBtn = document.getElementById("logout-btn");
-    if (logoutBtn) {
-        logoutBtn.addEventListener("click", logout);
-    }
+    document.querySelectorAll("#logout-btn").forEach(button => {
+        button.addEventListener("click", logout);
+    });
 });
 
 function logout() {
     localStorage.removeItem("token");
-    window.location.href = "auth.html";
+    window.location.href = "test.html";
 }

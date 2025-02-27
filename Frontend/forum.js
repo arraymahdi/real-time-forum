@@ -21,7 +21,7 @@ document.addEventListener("DOMContentLoaded", () => {
 function checkAuth() {
     const token = localStorage.getItem("token");
     if (!token) {
-        window.location.href = "auth.html";
+        window.location.href = "test.html";
     }
 }
 
@@ -34,29 +34,36 @@ function createPost() {
     const videoInput = document.getElementById("post-video");
 
     // Ensure all elements exist before accessing their values
-    if (!titleElement || !contentElement || !categoryElement) {
-        console.error("❌ One or more post input fields are missing in the DOM!");
+    if (!titleElement || !categoryElement) {
+        console.error("❌ One or more required post input fields are missing in the DOM!");
         return;
     }
 
     const title = titleElement.value.trim();
-    const content = contentElement.value.trim();
+    const content = contentElement ? contentElement.value.trim() : ""; // Content is optional
     const category = categoryElement.value.trim();
     const token = localStorage.getItem("token");
 
-    if (!title || !content) {
-        alert("❌ Title and content are required!");
+    // Validate title and category (content can be empty)
+    if (!title) {
+        alert("❌ Title is required!");
+        return;
+    }
+    if (!category) {
+        alert("❌ Category is required!");
         return;
     }
 
     const formData = new FormData();
     formData.append("title", title);
-    formData.append("content", content);
     formData.append("category", category);
-    if (imageInput.files.length > 0) {
+    if (content) {
+        formData.append("content", content);
+    }
+    if (imageInput && imageInput.files.length > 0) {
         formData.append("image", imageInput.files[0]);
     }
-    if (videoInput.files.length > 0) {
+    if (videoInput && videoInput.files.length > 0) {
         formData.append("video", videoInput.files[0]);
     }
 
@@ -191,5 +198,5 @@ document.addEventListener("DOMContentLoaded", () => {
 
 function logout() {
     localStorage.removeItem("token");
-    window.location.href = "auth.html";
+    window.location.href = "test.html";
 }

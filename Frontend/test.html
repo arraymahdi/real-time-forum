@@ -1,0 +1,139 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Forum</title>
+    <link rel="stylesheet" href="styles.css">
+    <script src="auth.js" defer></script>
+    <script src="forum.js" defer></script>
+    <script src="messages.js" defer></script>
+</head>
+<body>
+
+    <!-- Authentication Section -->
+    <div id="auth-section">
+        <div class="auth-container" id="login-form">
+            <h2>Login</h2>
+            <input class="auth-input" type="text" id="login-username" placeholder="Email or Nickname">
+            <input class="auth-input" type="password" id="login-password" placeholder="Password">
+            <button onclick="login()">Login</button>
+            <p>Don't have an account? <a href="#" id="open-signup">Sign up</a></p>
+        </div>
+
+        <!-- Signup Modal -->
+        <div id="signup-modal" class="modal hidden" style="display: none;">
+            <div class="auth-modal-content">
+                <span class="close" id="close-signup">&times;</span>
+                <h2>Sign Up</h2>
+                <input class="auth-input" type="text" id="register-nickname" placeholder="Nickname">
+                <input class="auth-input" type="number" id="register-age" placeholder="Age">
+                <select class="auth-select" id="register-gender">
+                    <option value="Male">Male</option>
+                    <option value="Female">Female</option>
+                    <option value="Other">Other</option>
+                </select>
+                <input class="auth-input" type="text" id="register-first-name" placeholder="First Name">
+                <input class="auth-input" type="text" id="register-last-name" placeholder="Last Name">
+                <input class="auth-input" type="email" id="register-email" placeholder="Email">
+                <input class="auth-input" type="password" id="register-password" placeholder="Password">
+                <button onclick="register()">Register</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Forum Section -->
+    <div id="forum-section" style="display: none;">
+        <header>
+            <h1>Forum</h1>
+            <button id="create-post-btn">+ Create Post</button>
+            <button id="messages-btn">💬 Messages</button>
+            <button id="logout-btn">Logout</button>
+        </header>
+
+        <div id="posts-container"></div>
+
+        <!-- Create Post Modal -->
+        <div id="create-post-modal" class="modal" style="display: none;">
+            <div class="modal-content">
+                <h2>Create Post</h2>
+                <input type="text" id="post-title" placeholder="Title" required>
+                <input type="text" id="post-category" placeholder="Category">
+                <textarea id="post-content" placeholder="Write your post..." required></textarea>
+                <input type="file" id="post-image" accept="image/*">
+                <input type="file" id="post-video" accept="video/*">
+                <button id="post-btn">Post</button>
+            </div>
+        </div>
+
+        <!-- View Post Modal -->
+        <div id="view-post-modal" class="modal" style="display: none;">
+            <div class="modal-content">
+                <h2 id="modal-title"></h2>
+                <p id="modal-author"></p>
+                <p id="modal-content"></p>
+                <img id="modal-image" style="display: none; max-width: 100%;" alt="Post Image">
+                <video id="modal-video" style="display: none; max-width: 100%;" controls></video>
+            </div>
+        </div>
+    </div>
+
+    <!-- Messages Section -->
+    <div id="messages-section" style="display: none;">
+        <header>
+            <h1>Forum</h1>
+            <button id="back-to-forum-btn">📰 Posts Explorer</button>
+            <button id="logout-btn">Logout</button>
+        </header>
+
+        <main class="chat-container">
+            <aside class="users-list" id="users-list">
+                <!-- Users will be loaded here -->
+            </aside>
+            <section class="chat-box">
+                <h2 id="chat-header">Select a user to chat</h2>
+                <div id="messages-list" class="messages-list">
+                    <!-- Messages will be loaded here -->
+                </div>
+                <div class="message-input">
+                    <input type="text" id="message-content" placeholder="Type a message...">
+                    <button id="send-btn">Send</button>
+                </div>
+            </section>
+        </main>
+    </div>
+
+    <script>
+        document.addEventListener("DOMContentLoaded", () => {
+            const forumSection = document.getElementById("forum-section");
+            const messagesSection = document.getElementById("messages-section");
+            const messagesBtn = document.getElementById("messages-btn");
+            const backToForumBtn = document.getElementById("back-to-forum-btn");
+
+            // Function to switch to messages
+            messagesBtn.addEventListener("click", () => {
+                forumSection.style.display = "none";
+                messagesSection.style.display = "block";
+            });
+
+            // Function to switch back to forum
+            backToForumBtn.addEventListener("click", () => {
+                messagesSection.style.display = "none";
+                forumSection.style.display = "block";
+            });
+
+            // Show forum by default after login
+            function showForum() {
+                document.getElementById("auth-section").style.display = "none";
+                forumSection.style.display = "block";
+            }
+
+            // Check if user is already logged in
+            if (localStorage.getItem("token")) {
+                showForum();
+            }
+        });
+    </script>
+
+</body>
+</html>
