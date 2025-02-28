@@ -20,6 +20,7 @@ document.addEventListener("DOMContentLoaded", async () => {
         } else if (data.sender_id && data.receiver_id) {
             if (data.receiver_id === currentUserID || data.sender_id === currentUserID) {
                 displayMessage(data, data.sender_id === currentUserID);
+                await fetchAndSortUsers();
             }
         }
     };
@@ -36,15 +37,12 @@ document.addEventListener("DOMContentLoaded", async () => {
 
             const users = await usersResponse.json();
             const onlineUsers = await onlineResponse.json();
-
-            // Get latest message timestamps for all users
             const latestMessagesMap = await getLatestMessageTimestamps(users);
 
-            // Sort users based on latest message timestamp (most recent first)
             users.sort((a, b) => {
                 const timeA = latestMessagesMap[a.id] || 0;
                 const timeB = latestMessagesMap[b.id] || 0;
-                return timeB - timeA; // Descending order (latest first)
+                return timeB - timeA;
             });
 
             renderUsers(users, onlineUsers, latestMessagesMap);
@@ -55,24 +53,20 @@ document.addEventListener("DOMContentLoaded", async () => {
 
     async function getLatestMessageTimestamps(users) {
         const timestamps = {};
-
         await Promise.all(users.map(async (user) => {
             if (user.id !== currentUserID) {
                 try {
                     const response = await fetch(`http://localhost:8088/messages?user1=${currentUserID}&user2=${user.id}&offset=0`);
                     const messages = await response.json();
 
-                    if (messages.length > 0) {
-                        timestamps[user.id] = new Date(messages[0].sent_at).getTime(); // Latest message timestamp
-                    } else {
-                        timestamps[user.id] = 0; // No messages
-                    }
+                    timestamps[user.id] = messages.length > 0
+                        ? new Date(messages[messages.length - 1].sent_at).getTime()
+                        : 0;
                 } catch (error) {
                     console.error(`Failed to fetch messages for user ${user.id}:`, error);
                 }
             }
         }));
-
         return timestamps;
     }
 
@@ -86,8 +80,9 @@ document.addEventListener("DOMContentLoaded", async () => {
                 userItem.classList.add("user-item");
                 userItem.dataset.id = user.id;
 
-                // Display latest message timestamp (if available)
-                const lastMessageTime = latestMessagesMap[user.id] ? new Date(latestMessagesMap[user.id]).toLocaleTimeString() : "No messages";
+                const lastMessageTime = latestMessagesMap[user.id]
+                    ? new Date(latestMessagesMap[user.id]).toLocaleTimeString()
+                    : "No messages";
 
                 userItem.innerHTML = `
                     <span class="status-dot ${onlineUsers.includes(user.id) ? 'online' : 'offline'}"></span>
@@ -122,12 +117,18 @@ document.addEventListener("DOMContentLoaded", async () => {
         if (loading) return;
         loading = true;
 
+        const messageList = document.getElementById("messages-list");
+        const prevScrollHeight = messageList.scrollHeight;
+        const prevScrollTop = messageList.scrollTop;
+
         try {
             const response = await fetch(`http://localhost:8088/messages?user1=${currentUserID}&user2=${selectedReceiverID}&offset=${offset}`);
             const newMessages = await response.json();
 
             if (newMessages.length > 0) {
-                messages = [...newMessages.reverse(), ...messages];
+                // Sort messages by `sent_at` ascending
+                newMessages.reverse();
+                messages = [...newMessages, ...messages];
                 offset += newMessages.length;
                 renderMessages(initialLoad);
             }
@@ -135,62 +136,65 @@ document.addEventListener("DOMContentLoaded", async () => {
             console.error("Failed to load messages:", error);
         } finally {
             loading = false;
+
+            // Preserve scroll position when loading old messages
+            if (!initialLoad) {
+                const newScrollHeight = messageList.scrollHeight;
+                messageList.scrollTop = prevScrollTop + (newScrollHeight - prevScrollHeight);
+            }
         }
     }
 
     function renderMessages(initialLoad = false) {
         const messageList = document.getElementById("messages-list");
         messageList.innerHTML = "";
-    
+
         if (messages.length === 0) {
             messageList.innerHTML = `<p class="no-messages">No messages yet. Say hello! 👋</p>`;
             return;
         }
-    
+
         messages.forEach(msg => displayMessage(msg, msg.sender_id === currentUserID));
-    
+
         if (initialLoad) {
             messageList.scrollTop = messageList.scrollHeight;
         }
     }
-    
 
     function timeAgo(date) {
         const now = new Date();
-        const diff = Math.floor((now - date) / 1000); // Difference in seconds
-    
+        const diff = Math.floor((now - date) / 1000);
+
         if (diff < 60) return "Just now";
         if (diff < 3600) return `${Math.floor(diff / 60)} mins ago`;
         if (diff < 86400) return `${Math.floor(diff / 3600)} hours ago`;
-        
-        return date.toLocaleDateString(); // Show full date if older than a day
+
+        return date.toLocaleDateString();
     }
-    
+
     function displayMessage(msg, isSender) {
         const messageList = document.getElementById("messages-list");
         const msgDiv = document.createElement("div");
         msgDiv.classList.add("message", isSender ? "sent" : "received");
-    
+
         const text = document.createElement("p");
         text.textContent = msg.content;
-    
+
         const timestamp = document.createElement("span");
         timestamp.classList.add("timestamp");
-        
+
         const sentAt = msg.sent_at ? new Date(msg.sent_at) : new Date();
         timestamp.textContent = timeAgo(sentAt);
-        
-        timestamp.title = sentAt.toLocaleString(); // Show full timestamp on hover
-        
+        timestamp.title = sentAt.toLocaleString();
+
         msgDiv.appendChild(text);
         msgDiv.appendChild(timestamp);
         messageList.appendChild(msgDiv);
     }
-    
 
     document.getElementById("messages-list").addEventListener("scroll", function () {
         if (this.scrollTop === 0) {
-            fetchMessages();
+            fetchMessages(false);
         }
     });
 
@@ -213,6 +217,7 @@ document.addEventListener("DOMContentLoaded", async () => {
                 sender_id: currentUserID,
                 receiver_id: selectedReceiverID,
                 content: message,
+                sent_at: new Date().toISOString()
             };
 
             socket.send(JSON.stringify(msgData));
@@ -221,16 +226,5 @@ document.addEventListener("DOMContentLoaded", async () => {
         } else {
             console.error("No receiver selected or message empty");
         }
-    }
-
-    document.addEventListener("DOMContentLoaded", function () {
-        document.querySelectorAll("#logout-btn").forEach(button => {
-            button.addEventListener("click", logout);
-        });
-    });
-
-    function logout() {
-        localStorage.removeItem("token");
-        window.location.href = "test.html";
     }
 });

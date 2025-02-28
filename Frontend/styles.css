@@ -134,7 +134,7 @@ button:hover, .back-btn:hover, #messages-btn:hover {
 .users-list {
     width: 20%;
     background: rgb(231, 229, 229);
-    padding: 15px;
+    padding: 50px;
     border-right: 1px solid #ccc;
     height: calc(100vh - 60px);
     position: fixed;
@@ -543,11 +543,7 @@ textarea {
 .no-messages {
     text-align: center;
     font-style: italic;
-    color: gray;
-    margin-top: 20px;
+    color: rgb(225, 222, 222);
+    margin-top: 15px;
 }
-/* .timestamp {
-    font-size: 0.75em;
-    color: gray;
-    margin-left: 5px;
-} */
+

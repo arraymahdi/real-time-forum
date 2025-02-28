@@ -15,7 +15,9 @@ document.addEventListener("DOMContentLoaded", () => {
         });
     });
 
-    document.getElementById("logout-btn").addEventListener("click", logout);
+    document.querySelectorAll("#logout-btn").forEach(button => {
+        button.addEventListener("click", logout);
+    });
 });
 
 function checkAuth() {
@@ -344,5 +346,5 @@ document.getElementById('categorize-btn').addEventListener('click', function () 
 
 function logout() {
     localStorage.removeItem("token");
-    window.location.href = "auth.html";
+    window.location.href = "test.html";
 }
