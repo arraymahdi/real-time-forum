@@ -46,7 +46,10 @@ document.addEventListener("DOMContentLoaded", () => {
     function renderUsers(users, onlineUsers) {
         const usersList = document.getElementById("users-list");
         usersList.innerHTML = "";
-
+    
+        // Sort users alphabetically by nickname (case-insensitive)
+        users.sort((a, b) => a.nickname.toLowerCase().localeCompare(b.nickname.toLowerCase()));
+    
         users.forEach(user => {
             if (user.id !== currentUserID) {
                 const userItem = document.createElement("div");
@@ -56,17 +59,17 @@ document.addEventListener("DOMContentLoaded", () => {
                     <span class="status-dot ${onlineUsers.includes(user.id) ? 'online' : 'offline'}"></span>
                     ${user.nickname}
                 `;
-
+    
                 userItem.addEventListener("click", () => {
                     document.getElementById("chat-header").textContent = `Chat with ${user.nickname}`;
                     loadMessages(user.id);
                 });
-
+    
                 usersList.appendChild(userItem);
             }
         });
     }
-
+    
     let messages = []; // Store all messages
     let offset = 0;
     const limit = 10;
