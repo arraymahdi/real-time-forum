@@ -539,3 +539,15 @@ textarea {
     border-radius: 5px;
     box-shadow: 0px 2px 4px rgba(0, 0, 0, 0.1);
 }
+
+.no-messages {
+    text-align: center;
+    font-style: italic;
+    color: gray;
+    margin-top: 20px;
+}
+/* .timestamp {
+    font-size: 0.75em;
+    color: gray;
+    margin-left: 5px;
+} */
