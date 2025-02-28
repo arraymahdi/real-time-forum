@@ -533,11 +533,6 @@ textarea {
     gap: 10px;
 }
 
-.category-box {
-           /* Allows text wrapping */
-}
-
-
 .post {
     background-color: white;
     padding: 10px;
