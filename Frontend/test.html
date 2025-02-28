@@ -48,12 +48,13 @@
         <header>
             <h1>Forum</h1>
             <button id="create-post-btn">+ Create Post</button>
-            <button id="messages-btn">💬 Messages</button>
+            <button id="categorize-btn">📂 Categorize Posts</button>
             <button id="logout-btn">Logout</button>
+            <button id="messages-btn">💬 Messages</button>
         </header>
-
+    
         <div id="posts-container"></div>
-
+    
         <!-- Create Post Modal -->
         <div id="create-post-modal" class="modal" style="display: none;">
             <div class="modal-content">
@@ -66,7 +67,7 @@
                 <button id="post-btn">Post</button>
             </div>
         </div>
-
+    
         <!-- View Post Modal -->
         <div id="view-post-modal" class="modal" style="display: none;">
             <div class="modal-content">
@@ -75,7 +76,7 @@
                 <p id="modal-content"></p>
                 <img id="modal-image" style="display: none; max-width: 100%;" alt="Post Image">
                 <video id="modal-video" style="display: none; max-width: 100%;" controls></video>
-        
+    
                 <!-- Comments Section -->
                 <div class="comments-section">
                     <h3>Comments</h3>
@@ -86,7 +87,7 @@
             </div>
         </div>
     </div>
-
+    
     <!-- Messages Section (Initially Hidden) -->
     <div id="messages-section" style="display: none;">
         <header>

@@ -99,6 +99,7 @@ function loadPosts() {
         posts.forEach(post => {
             const postElement = document.createElement("div");
             postElement.classList.add("post");
+            postElement.setAttribute("data-category", post.category || "Uncategorized");
 
             postElement.innerHTML = `
                 <h3>${post.title}</h3>
@@ -114,6 +115,7 @@ function loadPosts() {
     })
     .catch(error => console.error("Error loading posts:", error));
 }
+
 
 function viewPost(postId) {
     const token = localStorage.getItem("token");
@@ -281,6 +283,60 @@ document.addEventListener("DOMContentLoaded", () => {
     const closeButton = document.querySelector("#create-post-modal .close");
     if (closeButton) {
         closeButton.addEventListener("click", closeCreateModal);
+    }
+});
+
+let isCategorized = false;
+let originalPosts = []; // Stores original order of posts
+
+document.getElementById('categorize-btn').addEventListener('click', function () {
+    const postsContainer = document.getElementById('posts-container');
+
+    if (isCategorized) {
+        // Uncategorize: Restore original posts in their order
+        postsContainer.innerHTML = ''; // Clear current view
+        originalPosts.forEach(post => postsContainer.appendChild(post)); // Restore posts
+        isCategorized = false;
+        this.textContent = "Categorize Posts"; // Change button text
+    } else {
+        // Categorize: Group by category
+        const posts = Array.from(postsContainer.children);
+        if (originalPosts.length === 0) {
+            originalPosts = posts.map(post => post.cloneNode(true)); // Store original order
+        }
+
+        const categories = {};
+
+        posts.forEach(post => {
+            const category = post.getAttribute('data-category')?.trim() || 'Uncategorized';
+            if (!categories[category]) {
+                categories[category] = [];
+            }
+            categories[category].push(post);
+        });
+
+        postsContainer.innerHTML = ''; // Clear for categorization
+
+        Object.entries(categories).forEach(([category, posts]) => {
+            const categorySection = document.createElement('section');
+            categorySection.classList.add('category-section');
+
+            const categoryHeader = document.createElement('h2');
+            categoryHeader.textContent = category;
+            categoryHeader.classList.add('category-header');
+
+            const postContainer = document.createElement('div');
+            postContainer.classList.add('category-posts');
+
+            posts.forEach(post => postContainer.appendChild(post));
+
+            categorySection.appendChild(categoryHeader);
+            categorySection.appendChild(postContainer);
+            postsContainer.appendChild(categorySection);
+        });
+
+        isCategorized = true;
+        this.textContent = "Uncategorize Posts"; // Change button text
     }
 });
 
