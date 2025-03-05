@@ -36,7 +36,6 @@ var (
 )
 
 func handleConnections(w http.ResponseWriter, r *http.Request) {
-	// Upgrade connection
 	conn, err := upgrader.Upgrade(w, r, nil)
 	if err != nil {
 		log.Println("WebSocket upgrade error:", err)
@@ -44,7 +43,6 @@ func handleConnections(w http.ResponseWriter, r *http.Request) {
 	}
 	defer conn.Close()
 
-	// Read token from client
 	var authData struct {
 		Token string `json:"token"`
 	}
@@ -55,7 +53,6 @@ func handleConnections(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Extract user ID from the token
 	userID, err := ExtractUserIDFromToken(authData.Token)
 	if err != nil {
 		log.Println("Invalid token:", err)
@@ -63,41 +60,64 @@ func handleConnections(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Register client
 	clientsMux.Lock()
 	clients[userID] = &Client{conn: conn, id: userID}
 	clientsMux.Unlock()
 
-	log.Printf("User %d connected via WebSocket", userID)
+	log.Printf("User %d connected", userID)
 
-	// Ensure client is removed on disconnect
+	// Notify all clients about the new online user
+	broadcastOnlineUsers()
+
 	defer func() {
 		clientsMux.Lock()
 		delete(clients, userID)
 		clientsMux.Unlock()
 		log.Printf("User %d disconnected", userID)
+
+		// Notify all clients about the user going offline
+		broadcastOnlineUsers()
 	}()
 
-	// Send confirmation to the client
+	// Send confirmation to the connected client
 	conn.WriteJSON(map[string]string{"status": "connected", "user_id": fmt.Sprintf("%d", userID)})
 
-	// Keep connection open for messages
+	// Listen for messages from the user
 	for {
 		var msg Message
 		err := conn.ReadJSON(&msg)
 		if err != nil {
 			log.Println("Read error:", err)
-			break // Close connection if read fails
+			break
 		}
 
-		// Ensure sender ID is set to the authenticated user
 		msg.SenderID = userID
 		msg.SentAt = time.Now().Format(time.RFC3339)
 
-		// Save and forward the message
 		saveMessage(msg)
 		forwardMessage(msg)
 	}
+}
+
+func broadcastOnlineUsers() {
+	clientsMux.Lock()
+	onlineUsers := make([]int, 0, len(clients))
+	for id := range clients {
+		onlineUsers = append(onlineUsers, id)
+	}
+	clientsMux.Unlock()
+
+	// Send the updated online users list to all clients
+	notification := map[string]interface{}{
+		"type":         "online_users",
+		"online_users": onlineUsers,
+	}
+
+	clientsMux.Lock()
+	for _, client := range clients {
+		client.conn.WriteJSON(notification)
+	}
+	clientsMux.Unlock()
 }
 
 func saveMessage(msg Message) {
@@ -117,7 +137,6 @@ func forwardMessage(msg Message) {
 		receiver.conn.WriteJSON(msg)
 	}
 }
-
 
 func getMessagesHandler(w http.ResponseWriter, r *http.Request) {
 	var userID1, userID2, offset int

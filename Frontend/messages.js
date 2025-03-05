@@ -13,18 +13,35 @@ document.addEventListener("DOMContentLoaded", async () => {
     socket.onmessage = async (event) => {
         const data = JSON.parse(event.data);
         console.log("Message from server:", data);
-
+    
         if (data.status === "connected") {
             currentUserID = parseInt(data.user_id);
             await fetchAndSortUsers();
+        } else if (data.type === "online_users") {
+            updateOnlineUsers(data.online_users);
         } else if (data.sender_id && data.receiver_id) {
             if (data.receiver_id === currentUserID || data.sender_id === currentUserID) {
                 displayMessage(data, data.sender_id === currentUserID);
-                await fetchAndSortUsers();
+                await fetchAndSortUsers(); // Refresh users when a new message arrives
             }
         }
     };
 
+    function updateOnlineUsers(onlineUsers) {
+        document.querySelectorAll(".user-item").forEach(userItem => {
+            const userId = parseInt(userItem.dataset.id);
+            const statusDot = userItem.querySelector(".status-dot");
+            if (onlineUsers.includes(userId)) {
+                statusDot.classList.add("online");
+                statusDot.classList.remove("offline");
+            } else {
+                statusDot.classList.add("offline");
+                statusDot.classList.remove("online");
+            }
+        });
+    }
+    
+    
     socket.onclose = () => console.log("WebSocket connection closed.");
     socket.onerror = (error) => console.error("WebSocket error:", error);
 
@@ -53,20 +70,20 @@ document.addEventListener("DOMContentLoaded", async () => {
 
     async function getLatestMessageTimestamps(users) {
         const timestamps = {};
-        await Promise.all(users.map(async (user) => {
+        for (const user of users) {
             if (user.id !== currentUserID) {
                 try {
                     const response = await fetch(`http://localhost:8088/messages?user1=${currentUserID}&user2=${user.id}&offset=0`);
                     const messages = await response.json();
 
                     timestamps[user.id] = messages.length > 0
-                        ? new Date(messages[messages.length - 1].sent_at).getTime()
+                        ? new Date(messages[0].sent_at).getTime()
                         : 0;
                 } catch (error) {
                     console.error(`Failed to fetch messages for user ${user.id}:`, error);
                 }
             }
-        }));
+        }
         return timestamps;
     }
 
@@ -104,48 +121,44 @@ document.addEventListener("DOMContentLoaded", async () => {
     const limit = 10;
     let loading = false;
 
-    async function loadMessages(receiverID, initialLoad = true) {
+    async function loadMessages(receiverID) {
         selectedReceiverID = receiverID;
         offset = 0;
         messages = [];
 
         document.getElementById("messages-list").innerHTML = "";
-        await fetchMessages(initialLoad);
+        await fetchMessages();
     }
 
-    async function fetchMessages(initialLoad = false) {
+    async function fetchMessages() {
         if (loading) return;
         loading = true;
-
+    
         const messageList = document.getElementById("messages-list");
         const prevScrollHeight = messageList.scrollHeight;
         const prevScrollTop = messageList.scrollTop;
-
+    
         try {
             const response = await fetch(`http://localhost:8088/messages?user1=${currentUserID}&user2=${selectedReceiverID}&offset=${offset}`);
             const newMessages = await response.json();
-
+    
             if (newMessages.length > 0) {
-                // Sort messages by `sent_at` ascending
                 newMessages.reverse();
                 messages = [...newMessages, ...messages];
                 offset += newMessages.length;
-                renderMessages(initialLoad);
+                renderMessages(false);
             }
         } catch (error) {
             console.error("Failed to load messages:", error);
         } finally {
             loading = false;
-
-            // Preserve scroll position when loading old messages
-            if (!initialLoad) {
-                const newScrollHeight = messageList.scrollHeight;
-                messageList.scrollTop = prevScrollTop + (newScrollHeight - prevScrollHeight);
-            }
+    
+            // Preserve scroll position after loading older messages
+            messageList.scrollTop = prevScrollTop + (messageList.scrollHeight - prevScrollHeight);
         }
-    }
+    }    
 
-    function renderMessages(initialLoad = false) {
+    function renderMessages() {
         const messageList = document.getElementById("messages-list");
         messageList.innerHTML = "";
 
@@ -155,21 +168,7 @@ document.addEventListener("DOMContentLoaded", async () => {
         }
 
         messages.forEach(msg => displayMessage(msg, msg.sender_id === currentUserID));
-
-        if (initialLoad) {
-            messageList.scrollTop = messageList.scrollHeight;
-        }
-    }
-
-    function timeAgo(date) {
-        const now = new Date();
-        const diff = Math.floor((now - date) / 1000);
-
-        if (diff < 60) return "Just now";
-        if (diff < 3600) return `${Math.floor(diff / 60)} mins ago`;
-        if (diff < 86400) return `${Math.floor(diff / 3600)} hours ago`;
-
-        return date.toLocaleDateString();
+        messageList.scrollTop = messageList.scrollHeight;
     }
 
     function displayMessage(msg, isSender) {
@@ -192,9 +191,20 @@ document.addEventListener("DOMContentLoaded", async () => {
         messageList.appendChild(msgDiv);
     }
 
+    function timeAgo(date) {
+        const now = new Date();
+        const diff = Math.floor((now - date) / 1000);
+
+        if (diff < 60) return "Just now";
+        if (diff < 3600) return `${Math.floor(diff / 60)} mins ago`;
+        if (diff < 86400) return `${Math.floor(diff / 3600)} hours ago`;
+
+        return date.toLocaleDateString();
+    }
+
     document.getElementById("messages-list").addEventListener("scroll", function () {
         if (this.scrollTop === 0) {
-            fetchMessages(false);
+            fetchMessages();
         }
     });
 

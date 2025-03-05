@@ -33,7 +33,7 @@ type User struct {
 	Password  string `json:"password"`
 }
 
-var jwtSecret = []byte("your-secret-key")
+var jwtSecret = []byte("love-love-love")
 
 // base64Encode encodes data to base64 URL encoding without padding.
 func base64Encode(data []byte) string {
