@@ -8,6 +8,9 @@ document.addEventListener("DOMContentLoaded", () => {
         document.getElementById("create-post-modal").style.display = "flex";
     });
 
+    document.getElementById("post-btn").addEventListener("click", createPost);
+    document.getElementById("submit-comment").addEventListener("click", createComment);
+
     document.querySelectorAll(".close").forEach(btn => {
         btn.addEventListener("click", () => {
             closeCreateModal();
@@ -15,39 +18,67 @@ document.addEventListener("DOMContentLoaded", () => {
         });
     });
 
-    document.querySelectorAll("#logout-btn").forEach(button => {
-        button.addEventListener("click", logout);
+    window.addEventListener("click", (event) => {
+        const createModal = document.getElementById("create-post-modal");
+        const viewModal = document.getElementById("view-post-modal");
+        if (event.target === createModal) createModal.style.display = "none";
+        if (event.target === viewModal) viewModal.style.display = "none";
+    });
+
+    let isCategorized = false;
+    let originalPosts = [];
+    document.getElementById("categorize-btn").addEventListener("click", () => {
+        const postsContainer = document.getElementById("posts-container");
+        if (isCategorized) {
+            postsContainer.innerHTML = "";
+            originalPosts.forEach(post => postsContainer.appendChild(post));
+            isCategorized = false;
+            document.getElementById("categorize-btn").textContent = "📂 Categorize Posts";
+        } else {
+            const posts = Array.from(postsContainer.children);
+            if (originalPosts.length === 0) originalPosts = posts.map(post => post.cloneNode(true));
+
+            const categories = {};
+            posts.forEach(post => {
+                const category = post.getAttribute("data-category") || "Uncategorized";
+                if (!categories[category]) categories[category] = [];
+                categories[category].push(post);
+            });
+
+            postsContainer.innerHTML = "";
+            Object.entries(categories).forEach(([category, posts]) => {
+                const section = document.createElement("section");
+                section.classList.add("category-section");
+                section.innerHTML = `<h2 class="category-header">${category}</h2>`;
+                const postContainer = document.createElement("div");
+                postContainer.classList.add("category-posts");
+                posts.forEach(post => postContainer.appendChild(post));
+                section.appendChild(postContainer);
+                postsContainer.appendChild(section);
+            });
+
+            isCategorized = true;
+            document.getElementById("categorize-btn").textContent = "📂 Uncategorize Posts";
+        }
     });
 });
 
 function checkAuth() {
-    const token = localStorage.getItem("token");
-    if (!token) {
-        window.location.href = "auth.html";
+    if (!localStorage.getItem("token")) {
+        window.location.href = "index.html";
     }
 }
 
 function createPost() {
-    // Get input elements
-    const titleElement = document.getElementById("post-title");
-    const contentElement = document.getElementById("post-content");
-    const categoryElement = document.getElementById("post-category");
+    const title = document.getElementById("post-title").value.trim();
+    const content = document.getElementById("post-content").value.trim();
+    const category = document.getElementById("post-category").value.trim();
     const imageInput = document.getElementById("post-image");
     const videoInput = document.getElementById("post-video");
-
-    // Ensure all elements exist before accessing their values
-    if (!titleElement || !contentElement || !categoryElement) {
-        console.error("❌ One or more post input fields are missing in the DOM!");
-        return;
-    }
-
-    const title = titleElement.value.trim();
-    const content = contentElement.value.trim();
-    const category = categoryElement.value.trim();
     const token = localStorage.getItem("token");
 
     if (!title || !content) {
-        alert("❌ Title and content are required!");
+        alert("Title and content are required!");
         return;
     }
 
@@ -55,12 +86,8 @@ function createPost() {
     formData.append("title", title);
     formData.append("content", content);
     formData.append("category", category);
-    if (imageInput.files.length > 0) {
-        formData.append("image", imageInput.files[0]);
-    }
-    if (videoInput.files.length > 0) {
-        formData.append("video", videoInput.files[0]);
-    }
+    if (imageInput.files.length > 0) formData.append("image", imageInput.files[0]);
+    if (videoInput.files.length > 0) formData.append("video", videoInput.files[0]);
 
     fetch(`${API_BASE_URL}/posts`, {
         method: "POST",
@@ -69,24 +96,11 @@ function createPost() {
     })
     .then(response => response.json())
     .then(() => {
-        closeCreateModal(); // ✅ Close modal after posting
-        loadPosts(); // ✅ Refresh posts
+        closeCreateModal();
+        loadPosts();
     })
-    .catch(error => console.error("❌ Error creating post:", error));
+    .catch(error => console.error("Error creating post:", error));
 }
-
-// ✅ Close modal function
-function closeCreateModal() {
-    document.getElementById("create-post-modal").style.display = "none";
-}
-
-// ✅ Add event listener for post button after DOM loads
-document.addEventListener("DOMContentLoaded", () => {
-    const postButton = document.getElementById("post-btn");
-    if (postButton) {
-        postButton.addEventListener("click", createPost);
-    }
-});
 
 function loadPosts() {
     const token = localStorage.getItem("token");
@@ -102,7 +116,6 @@ function loadPosts() {
             const postElement = document.createElement("div");
             postElement.classList.add("post");
             postElement.setAttribute("data-category", post.category || "Uncategorized");
-
             postElement.innerHTML = `
                 <h3>${post.title}</h3>
                 <p class="post-author">Posted by: <strong>${post.nickname}</strong></p>
@@ -111,13 +124,11 @@ function loadPosts() {
                 ${post.video_path ? `<video src="${API_BASE_URL}/${post.video_path}" controls></video>` : ""}
                 <button onclick="viewPost(${post.id})">View</button>
             `;
-
             container.appendChild(postElement);
         });
     })
     .catch(error => console.error("Error loading posts:", error));
 }
-
 
 function viewPost(postId) {
     const token = localStorage.getItem("token");
@@ -126,225 +137,84 @@ function viewPost(postId) {
         headers: { "Authorization": `Bearer ${token}` }
     })
     .then(response => {
-        if (!response.ok) throw new Error(`❌ Post not found (Status: ${response.status})`);
+        if (!response.ok) throw new Error("Post not found");
         return response.json();
     })
     .then(post => {
         const modal = document.getElementById("view-post-modal");
-        modal.dataset.postId = post.id;  // Store the post ID in the modal
-
-        const titleElement = document.getElementById("modal-title");
-        const authorElement = document.getElementById("modal-author");
-        const contentElement = document.getElementById("modal-content");
-        const imageElement = document.getElementById("modal-image");
-        const videoElement = document.getElementById("modal-video");
-
-        titleElement.textContent = post.title;
-        authorElement.textContent = `Posted by: ${post.nickname}`;
-        contentElement.textContent = post.content;
-
-        // Display the image if it exists
+        modal.dataset.postId = post.id;
+        document.getElementById("modal-title").textContent = post.title;
+        document.getElementById("modal-author").textContent = `Posted by: ${post.nickname}`;
+        document.getElementById("modal-content").textContent = post.content;
+        const image = document.getElementById("modal-image");
+        const video = document.getElementById("modal-video");
         if (post.image_path) {
-            imageElement.src = `${API_BASE_URL}/${post.image_path}`;
-            imageElement.style.display = "block";
+            image.src = `${API_BASE_URL}/${post.image_path}`;
+            image.style.display = "block";
         } else {
-            imageElement.style.display = "none";
+            image.style.display = "none";
         }
-
-        // Display the video if it exists
         if (post.video_path) {
-            videoElement.src = `${API_BASE_URL}/${post.video_path}`;
-            videoElement.style.display = "block";
+            video.src = `${API_BASE_URL}/${post.video_path}`;
+            video.style.display = "block";
         } else {
-            videoElement.style.display = "none";
+            video.style.display = "none";
         }
-
         modal.style.display = "flex";
-
-        // Load comments for this post
         loadComments(postId);
     })
-    .catch(error => console.error("❌ Error loading post:", error));
+    .catch(error => console.error("Error loading post:", error));
 }
-
 
 function loadComments(postId) {
-    const commentsContainer = document.getElementById("comments-container");
     fetch(`${API_BASE_URL}/comments/all?post_id=${postId}`)
-        .then(response => response.json())
-        .then(comments => {
-            commentsContainer.innerHTML = "";
-            comments.forEach(comment => {
-                const commentDiv = document.createElement("div");
-                commentDiv.classList.add("comment");
-                
-                // Update to use the nickname from the backend
-                commentDiv.innerHTML = `<strong>${comment.nickname}:</strong> ${comment.content}`;
-                
-                commentsContainer.appendChild(commentDiv);
-            });
-        })
-        .catch(error => console.error("Error loading comments:", error));
+    .then(response => response.json())
+    .then(comments => {
+        const container = document.getElementById("comments-container");
+        container.innerHTML = "";
+        comments.forEach(comment => {
+            const div = document.createElement("div");
+            div.classList.add("comment");
+            div.innerHTML = `<strong>${comment.nickname}:</strong> ${comment.content}`;
+            container.appendChild(div);
+        });
+    })
+    .catch(error => console.error("Error loading comments:", error));
 }
 
-
 function createComment() {
-    const commentInput = document.getElementById("comment-input");
-    const commentText = commentInput.value.trim();
-    const postId = document.getElementById("view-post-modal").dataset.postId;  // Get post ID from data attribute
+    const content = document.getElementById("comment-input").value.trim();
+    const postId = document.getElementById("view-post-modal").dataset.postId;
     const token = localStorage.getItem("token");
 
-    console.log("Token:", token); 
-
-    if (!postId) {
-        console.error("❌ Post ID is missing!");
-        return;
-    }
-    if (!commentText) {
-        alert("❌ Comment content is required!");
+    if (!content) {
+        alert("Comment content is required!");
         return;
     }
 
-    // Prepare the data to send
-    const data = {
-        content: commentText,
-    };
-
-    // Send the comment to the backend
     fetch(`${API_BASE_URL}/comments?post_id=${postId}`, {
         method: "POST",
         headers: {
             "Content-Type": "application/json",
-            "Authorization": `${token}`  // Include token in the Authorization header
+            "Authorization": `${token}`
         },
-        body: JSON.stringify(data)  // Send the comment content in the request body
+        body: JSON.stringify({ content })
     })
     .then(response => {
-        if (response.status === 401) {
-            alert("❌ Unauthorized. Please log in again.");
-            window.location.href = "test.html";  // Redirect to login page if unauthorized
-            throw new Error("Unauthorized");
-        }
-        return response.json();  // Parse the response JSON
+        if (!response.ok) throw new Error("Unauthorized");
+        return response.json();
     })
     .then(() => {
-        commentInput.value = "";  // Clear the input field after posting the comment
-        loadComments(postId);  // Reload comments after posting
+        document.getElementById("comment-input").value = "";
+        loadComments(postId);
     })
-    .catch(error => console.error("❌ Error posting comment:", error));
+    .catch(error => console.error("Error posting comment:", error));
 }
 
-
-document.addEventListener("DOMContentLoaded", () => {
-    checkAuth();
-    loadPosts();
-
-    // Comment submission event
-    document.getElementById("submit-comment").addEventListener("click", createComment);
-
-    document.querySelectorAll(".close").forEach(btn => {
-        btn.addEventListener("click", () => {
-            closeCreateModal();
-            closeViewModal();
-        });
-    });
-
-    document.getElementById("logout-btn").addEventListener("click", logout);
-});
-
-function checkAuth() {
-    const token = localStorage.getItem("token");
-    if (!token) {
-        window.location.href = "test.html";  // Redirect to login if token is missing
-    }
+function closeCreateModal() {
+    document.getElementById("create-post-modal").style.display = "none";
 }
 
-// Decode the JWT token to extract user ID
-function decodeToken(token) {
-    if (!token) return null;
-
-    const payload = token.split('.')[1];
-    const decodedPayload = atob(payload);
-    const payloadJson = JSON.parse(decodedPayload);
-
-    return payloadJson.user_id;  // Assuming the user ID is stored as 'user_id' in the token
-}
-
-
-window.onclick = function(event) {
-    const modal_1 = document.getElementById("view-post-modal");
-    const modal = document.getElementById("create-post-modal");
-    if (event.target === modal || event.target === modal_1) {
-        modal.style.display = "none";
-        modal_1.style.display = "none";
-    }
-};
-
-// ✅ Add event listener for the close button
-document.addEventListener("DOMContentLoaded", () => {
-    const closeButton = document.querySelector("#create-post-modal .close");
-    if (closeButton) {
-        closeButton.addEventListener("click", closeCreateModal);
-    }
-});
-
-let isCategorized = false;
-let originalPosts = []; // Stores original order of posts
-
-document.getElementById('categorize-btn').addEventListener('click', function () {
-    const postsContainer = document.getElementById('posts-container');
-
-    if (isCategorized) {
-        // Uncategorize: Restore original posts in their order
-        postsContainer.innerHTML = ''; // Clear current view
-        originalPosts.forEach(post => postsContainer.appendChild(post)); // Restore posts
-        isCategorized = false;
-        this.textContent = "Categorize Posts"; // Change button text
-    } else {
-        // Categorize: Group by category
-        const posts = Array.from(postsContainer.children);
-        if (originalPosts.length === 0) {
-            originalPosts = posts.map(post => post.cloneNode(true)); // Store original order
-        }
-
-        const categories = {};
-
-        posts.forEach(post => {
-            const category = post.getAttribute('data-category')?.trim() || 'Uncategorized';
-            if (!categories[category]) {
-                categories[category] = [];
-            }
-            categories[category].push(post);
-        });
-
-        postsContainer.innerHTML = ''; // Clear for categorization
-
-        Object.entries(categories).forEach(([category, posts]) => {
-            const categorySection = document.createElement('section');
-            categorySection.classList.add('category-section');
-
-            const categoryHeader = document.createElement('h2');
-            categoryHeader.textContent = category;
-            categoryHeader.classList.add('category-header');
-
-            const postContainer = document.createElement('div');
-            postContainer.classList.add('category-posts');
-
-            posts.forEach(post => postContainer.appendChild(post));
-
-            categorySection.appendChild(categoryHeader);
-            categorySection.appendChild(postContainer);
-            postsContainer.appendChild(categorySection);
-        });
-
-        isCategorized = true;
-        this.textContent = "Uncategorize Posts"; // Change button text
-    }
-});
-
-
-
-function logout() {
-    localStorage.removeItem("token");
-    window.location.href = "test.html";
+function closeViewModal() {
+    document.getElementById("view-post-modal").style.display = "none";
 }

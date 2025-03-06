@@ -1,27 +1,20 @@
 document.addEventListener("DOMContentLoaded", () => {
-    const forumSection = document.getElementById("forum-section");
-    const messagesSection = document.getElementById("messages-section");
-    const messagesBtn = document.getElementById("messages-btn");
-    const explorePostsBtn = document.getElementById("explore-posts-btn");
+    const pages = {
+        home: document.getElementById("forum-section"),
+        messages: document.getElementById("messages-section"),
+        auth: document.getElementById("auth-section")
+    };
 
-    // Check if buttons exist
-    if (!messagesBtn) {
-        console.error("Messages button not found!");
-    } else {
-        messagesBtn.addEventListener("click", () => {
-            console.log("Switching to messages section");
-            forumSection.style.display = "none";
-            messagesSection.style.display = "block";
-        });
+    function navigateTo(page) {
+        Object.values(pages).forEach(p => p.style.display = "none");
+        if (pages[page]) pages[page].style.display = "block";
     }
 
-    if (!explorePostsBtn) {
-        console.error("Explore posts button not found!");
-    } else {
-        explorePostsBtn.addEventListener("click", () => {
-            console.log("Switching to forum section");
-            messagesSection.style.display = "none";
-            forumSection.style.display = "block";
-        });
-    }
+    checkAuth();
 });
+
+function checkAuth() {
+    if (!localStorage.getItem("token")) {
+        navigateTo("auth");
+    }
+}

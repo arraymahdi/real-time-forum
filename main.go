@@ -12,8 +12,8 @@ func main() {
 	defer db.Close()
 
 	// Serve static files (images/videos)
-    fs := http.FileServer(http.Dir("uploads"))
-    http.Handle("/uploads/", http.StripPrefix("/uploads/", fs))
+	fs := http.FileServer(http.Dir("uploads"))
+	http.Handle("/uploads/", http.StripPrefix("/uploads/", fs))
 
 	// Set up routes with CORS disabled
 	http.HandleFunc("/register", disableCORS(registerHandler))
@@ -21,17 +21,16 @@ func main() {
 
 	http.HandleFunc("/posts", disableCORS(jwtMiddleware(createPostHandler)))
 	http.HandleFunc("/posts/all", disableCORS(getPostsHandler))
-	http.HandleFunc("/post/", disableCORS(GetPostByIDHandler)) 
+	http.HandleFunc("/post/", disableCORS(GetPostByIDHandler))
 	http.HandleFunc("/comments", disableCORS(jwtMiddleware(createCommentHandler)))
 	http.HandleFunc("/comments/all", disableCORS(getCommentsByPostHandler))
-
 
 	http.HandleFunc("/ws", disableCORS(handleConnections))
 	http.HandleFunc("/messages", disableCORS(getMessagesHandler))
 	http.HandleFunc("/online", disableCORS(getOnlineUsers))
+	http.HandleFunc("/getSortedUsers", disableCORS(getSortedUsersHandler))
 
 	http.HandleFunc("/users", disableCORS(getAllUsersHandler))
-	
 
 	fmt.Println("Server running on port 8088")
 	log.Fatal(http.ListenAndServe(":8088", nil))

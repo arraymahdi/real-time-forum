@@ -1,14 +1,10 @@
-document.addEventListener("DOMContentLoaded", function () {
+document.addEventListener("DOMContentLoaded", () => {
+    const token = localStorage.getItem("token");
     const authSection = document.getElementById("auth-section");
     const forumSection = document.getElementById("forum-section");
-    const logoutBtn = document.getElementById("logout-btn");
 
-    const signupModal = document.getElementById("signup-modal");
-    const openSignup = document.getElementById("open-signup");
-    const closeSignup = document.getElementById("close-signup");
+    console.log("Checking auth, token:", token);
 
-    // Check if user is logged in
-    const token = localStorage.getItem("token");
     if (token) {
         authSection.style.display = "none";
         forumSection.style.display = "block";
@@ -17,39 +13,27 @@ document.addEventListener("DOMContentLoaded", function () {
         forumSection.style.display = "none";
     }
 
-    // Open signup modal
-    if (openSignup && signupModal) {
-        openSignup.addEventListener("click", function () {
-            signupModal.style.display = "flex";
-        });
-    }
+    const signupModal = document.getElementById("signup-modal");
+    const openSignup = document.getElementById("open-signup");
+    const closeSignup = document.getElementById("close-signup");
 
-    // Close signup modal
-    if (closeSignup && signupModal) {
-        closeSignup.addEventListener("click", function () {
-            signupModal.style.display = "none";
-        });
+    if (openSignup) {
+        openSignup.addEventListener("click", () => signupModal.style.display = "flex");
     }
-
+    if (closeSignup) {
+        closeSignup.addEventListener("click", () => signupModal.style.display = "none");
+    }
     if (signupModal) {
-        window.addEventListener("click", function (event) {
-            if (event.target === signupModal) {
-                signupModal.style.display = "none";
-            }
+        window.addEventListener("click", (event) => {
+            if (event.target === signupModal) signupModal.style.display = "none";
         });
     }
 
-    // Logout function
-    if (logoutBtn) {
-        logoutBtn.addEventListener("click", function () {
-            localStorage.removeItem("token");
-            authSection.style.display = "block";
-            forumSection.style.display = "none";
-        });
-    }
+    document.querySelectorAll("#logout-btn").forEach(button => {
+        button.addEventListener("click", logout);
+    });
 });
 
-// Login function
 async function login() {
     const usernameField = document.getElementById("login-username");
     const passwordField = document.getElementById("login-password");
@@ -61,6 +45,8 @@ async function login() {
         password: passwordField.value.trim(),
     };
 
+    console.log("Attempting login with:", user);
+
     try {
         const response = await fetch("http://localhost:8088/login", {
             method: "POST",
@@ -68,20 +54,19 @@ async function login() {
             body: JSON.stringify(user),
         });
 
-        if (!response.ok) throw new Error("Login failed");
+        if (!response.ok) throw new Error(`Login failed: ${await response.text()}`);
 
         const data = await response.json();
         localStorage.setItem("token", data.token);
-
-        // Show forum and hide auth
+        console.log("Login successful, token:", data.token);
         document.getElementById("auth-section").style.display = "none";
         document.getElementById("forum-section").style.display = "block";
     } catch (error) {
+        console.error("Login error:", error);
         alert(error.message);
     }
 }
 
-// Register function
 async function register() {
     const user = {
         nickname: document.getElementById("register-nickname").value.trim(),
@@ -93,6 +78,8 @@ async function register() {
         password: document.getElementById("register-password").value.trim(),
     };
 
+    console.log("Attempting registration with:", user);
+
     try {
         const response = await fetch("http://localhost:8088/register", {
             method: "POST",
@@ -100,20 +87,20 @@ async function register() {
             body: JSON.stringify(user),
         });
 
-        if (!response.ok) {
-            const errorMsg = await response.text();
-            throw new Error(`Registration failed: ${errorMsg}`);
-        }
-
+        if (!response.ok) throw new Error(`Registration failed: ${await response.text()}`);
+        console.log("Registration successful");
         alert("Registration successful! You can now log in.");
         document.getElementById("signup-modal").style.display = "none";
     } catch (error) {
+        console.error("Registration error:", error);
         alert(error.message);
     }
 }
 
-// Fix logout to stay in test.html
 function logout() {
     localStorage.removeItem("token");
-    checkAuth(); // Just update UI
+    console.log("Logged out, token removed");
+    document.getElementById("auth-section").style.display = "block";
+    document.getElementById("forum-section").style.display = "none";
+    document.getElementById("messages-section").style.display = "none";
 }

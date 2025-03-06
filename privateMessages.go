@@ -182,3 +182,116 @@ func getOnlineUsers(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(users)
 }
+
+func getSortedUsersHandler(w http.ResponseWriter, r *http.Request) {
+	var userID int
+	fmt.Sscanf(r.URL.Query().Get("user_id"), "%d", &userID)
+
+	// Step 1: Query users who have at least one message with the given user and get their nickname
+	rows, err := db.Query(`
+        SELECT DISTINCT u.id, u.nickname, MAX(m.sent_at) as last_message_time
+        FROM users u
+        LEFT JOIN messages m ON (m.sender_id = u.id OR m.receiver_id = u.id)
+        WHERE u.id != ? AND (m.sender_id = ? OR m.receiver_id = ?)
+        GROUP BY u.id
+        ORDER BY last_message_time DESC
+    `, userID, userID, userID)
+
+	if err != nil {
+		log.Printf("Database query error: %v", err)
+		http.Error(w, "Database error", http.StatusInternalServerError)
+		return
+	}
+	defer rows.Close()
+
+	var usersWithMessages []struct {
+		ID              int    `json:"id"`
+		Nickname        string `json:"nickname"`
+		LastMessageTime string `json:"last_message_time"`
+	}
+
+	for rows.Next() {
+		var user struct {
+			ID              int    `json:"id"`
+			Nickname        string `json:"nickname"`
+			LastMessageTime string `json:"last_message_time"`
+		}
+		if err := rows.Scan(&user.ID, &user.Nickname, &user.LastMessageTime); err == nil {
+			usersWithMessages = append(usersWithMessages, user)
+		} else {
+			log.Printf("Error scanning row: %v", err)
+		}
+	}
+
+	// Step 2: Query users who have no chat with the given user and get their nickname
+	rows2, err := db.Query(`
+        SELECT id, nickname
+        FROM users
+        WHERE id != ? AND id NOT IN (
+            SELECT DISTINCT receiver_id FROM messages WHERE sender_id = ?
+            UNION
+            SELECT DISTINCT sender_id FROM messages WHERE receiver_id = ?
+        )
+        ORDER BY nickname ASC
+    `, userID, userID, userID)
+
+	if err != nil {
+		log.Printf("Database query error: %v", err)
+		http.Error(w, "Database error", http.StatusInternalServerError)
+		return
+	}
+	defer rows2.Close()
+
+	var usersNoMessages []struct {
+		ID       int    `json:"id"`
+		Nickname string `json:"nickname"`
+	}
+
+	for rows2.Next() {
+		var user struct {
+			ID       int    `json:"id"`
+			Nickname string `json:"nickname"`
+		}
+		if err := rows2.Scan(&user.ID, &user.Nickname); err == nil {
+			usersNoMessages = append(usersNoMessages, user)
+		} else {
+			log.Printf("Error scanning row: %v", err)
+		}
+	}
+
+	// Combine both lists
+	var sortedUsers []struct {
+		ID              int    `json:"id"`
+		LastMessageTime string `json:"last_message_time"`
+		Nickname        string `json:"nickname"`
+	}
+
+	// Append users with messages
+	for _, user := range usersWithMessages {
+		sortedUsers = append(sortedUsers, struct {
+			ID              int    `json:"id"`
+			LastMessageTime string `json:"last_message_time"`
+			Nickname        string `json:"nickname"`
+		}{
+			ID:              user.ID,
+			Nickname:        user.Nickname,
+			LastMessageTime: user.LastMessageTime,
+		})
+	}
+
+	// Append users with no messages (sorted alphabetically by nickname)
+	for _, user := range usersNoMessages {
+		sortedUsers = append(sortedUsers, struct {
+			ID              int    `json:"id"`
+			LastMessageTime string `json:"last_message_time"`
+			Nickname        string `json:"nickname"`
+		}{
+			ID:       user.ID,
+			Nickname: user.Nickname,
+		})
+	}
+
+	// Respond with the sorted list
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(sortedUsers)
+}

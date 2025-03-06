@@ -8,10 +8,10 @@
     <script src="auth.js" defer></script>
     <script src="forum.js" defer></script>
     <script src="messages.js" defer></script>
+    <script src="users.js" defer></script>
     <script src="navigation.js" defer></script>
 </head>
 <body>
-
     <!-- Authentication Section -->
     <div id="auth-section">
         <div class="auth-container" id="login-form">
@@ -23,7 +23,7 @@
         </div>
 
         <!-- Signup Modal -->
-        <div id="signup-modal" class="modal hidden" style="display: none;">
+        <div id="signup-modal" class="modal" style="display: none;">
             <div class="auth-modal-content">
                 <span class="close" id="close-signup">&times;</span>
                 <h2>Sign Up</h2>
@@ -52,12 +52,15 @@
             <button id="logout-btn">Logout</button>
             <button id="messages-btn">💬 Messages</button>
         </header>
-    
-        <div id="posts-container"></div>
-    
+        <main class="forum-container">
+            <aside class="users-list" id="forum-users-list"></aside>
+            <div id="posts-container"></div>
+        </main>
+
         <!-- Create Post Modal -->
         <div id="create-post-modal" class="modal" style="display: none;">
             <div class="modal-content">
+                <span class="close">&times;</span>
                 <h2>Create Post</h2>
                 <input type="text" id="post-title" placeholder="Title" required>
                 <input type="text" id="post-category" placeholder="Category">
@@ -67,17 +70,16 @@
                 <button id="post-btn">Post</button>
             </div>
         </div>
-    
+
         <!-- View Post Modal -->
         <div id="view-post-modal" class="modal" style="display: none;">
             <div class="modal-content">
+                <span class="close">&times;</span>
                 <h2 id="modal-title"></h2>
                 <p id="modal-author"></p>
                 <p id="modal-content"></p>
-                <img id="modal-image" style="display: none; max-width: 100%;" alt="Post Image">
-                <video id="modal-video" style="display: none; max-width: 100%;" controls></video>
-    
-                <!-- Comments Section -->
+                <img id="modal-image" style="display: none;" alt="Post Image">
+                <video id="modal-video" style="display: none;" controls></video>
                 <div class="comments-section">
                     <h3>Comments</h3>
                     <div id="comments-container" class="comments-container"></div>
@@ -87,8 +89,8 @@
             </div>
         </div>
     </div>
-    
-    <!-- Messages Section (Initially Hidden) -->
+
+    <!-- Messages Section -->
     <div id="messages-section" style="display: none;">
         <header>
             <h1>Forum</h1>
@@ -96,16 +98,11 @@
             <a href="javascript:void(0)" id="messages-btn" class="active">💬 Messages</a>
             <button id="logout-btn">Logout</button>
         </header>
-
         <main class="chat-container">
-            <aside class="users-list" id="users-list">
-                <!-- Users will be loaded here -->
-            </aside>
+            <aside class="users-list" id="messages-users-list"></aside>
             <section class="chat-box">
                 <h2 id="chat-header">Select a user to chat</h2>
-                <div id="messages-list" class="messages-list">
-                    <!-- Messages will be loaded here -->
-                </div>
+                <div id="messages-list" class="messages-list"></div>
                 <div class="message-input">
                     <input type="text" id="message-content" placeholder="Type a message...">
                     <button id="send-btn">Send</button>
