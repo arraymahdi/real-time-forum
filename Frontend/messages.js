@@ -51,34 +51,67 @@ document.addEventListener("DOMContentLoaded", async () => {
                 fetch("http://localhost:8088/users"),
                 fetch("http://localhost:8088/online"),
             ]);
-
-            const users = await usersResponse.json();
-            const onlineUsers = await onlineResponse.json();
+    
+            if (!usersResponse.ok || !onlineResponse.ok) {
+                console.error("Failed to fetch users or online status");
+                return;
+            }
+    
+            const users = await usersResponse.json() || [];
+            const onlineUsers = await onlineResponse.json() || [];
             const latestMessagesMap = await getLatestMessageTimestamps(users);
-
-            users.sort((a, b) => {
+    
+            console.log("Fetched Users:", users);
+            console.log("Online Users:", onlineUsers);
+            console.log("Latest Messages Map:", latestMessagesMap);
+    
+            // Sort users into two groups: with and without messages
+            const sortedUsers = users.sort((a, b) => {
                 const timeA = latestMessagesMap[a.id] || 0;
                 const timeB = latestMessagesMap[b.id] || 0;
-                return timeB - timeA;
+    
+                // If both users have messages, sort by the latest message date
+                if (timeA && timeB) {
+                    return timeB - timeA;
+                }
+    
+                // If one user has messages and the other doesn't, put the one with messages first
+                if (timeA && !timeB) {
+                    return -1;
+                }
+                if (!timeA && timeB) {
+                    return 1;
+                }
+    
+                // If neither has messages, sort alphabetically by username
+                const usernameA = a.nickname || ''; // Ensure no error if 'nickname' is undefined
+                const usernameB = b.nickname || ''; // Ensure no error if 'nickname' is undefined
+    
+                return usernameA.localeCompare(usernameB);
             });
-
-            renderUsers(users, onlineUsers, latestMessagesMap);
+    
+            console.log("Sorted Users:", sortedUsers);
+    
+            renderUsers(sortedUsers, onlineUsers, latestMessagesMap);
         } catch (error) {
             console.error("Failed to fetch users:", error);
         }
     }
-
+    
     async function getLatestMessageTimestamps(users) {
         const timestamps = {};
         for (const user of users) {
             if (user.id !== currentUserID) {
                 try {
                     const response = await fetch(`http://localhost:8088/messages?user1=${currentUserID}&user2=${user.id}&offset=0`);
-                    const messages = await response.json();
-
-                    timestamps[user.id] = messages.length > 0
-                        ? new Date(messages[0].sent_at).getTime()
-                        : 0;
+                    if (response.ok) {
+                        const messages = await response.json() || [];
+                        timestamps[user.id] = messages.length > 0
+                            ? new Date(messages[0]?.sent_at).getTime()
+                            : 0;
+                    } else {
+                        console.error(`Failed to fetch messages for user ${user.id}: HTTP ${response.status}`);
+                    }
                 } catch (error) {
                     console.error(`Failed to fetch messages for user ${user.id}:`, error);
                 }
@@ -86,35 +119,36 @@ document.addEventListener("DOMContentLoaded", async () => {
         }
         return timestamps;
     }
-
+    
     function renderUsers(users, onlineUsers, latestMessagesMap) {
         const usersList = document.getElementById("users-list");
         usersList.innerHTML = "";
-
+    
         users.forEach(user => {
             if (user.id !== currentUserID) {
                 const userItem = document.createElement("div");
                 userItem.classList.add("user-item");
                 userItem.dataset.id = user.id;
-
+    
                 const lastMessageTime = latestMessagesMap[user.id]
                     ? new Date(latestMessagesMap[user.id]).toLocaleTimeString()
                     : "No messages";
-
+    
                 userItem.innerHTML = `
                     <span class="status-dot ${onlineUsers.includes(user.id) ? 'online' : 'offline'}"></span>
                     ${user.nickname} <small class="last-message-time">${lastMessageTime}</small>
                 `;
-
+    
                 userItem.addEventListener("click", () => {
                     document.getElementById("chat-header").textContent = `Chat with ${user.nickname}`;
                     loadMessages(user.id);
                 });
-
+    
                 usersList.appendChild(userItem);
             }
         });
     }
+    
 
     let messages = [];
     let offset = 0;
