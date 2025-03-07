@@ -72,7 +72,7 @@ async function fetchMessages() {
             messageList.scrollTop = prevScrollTop + (messageList.scrollHeight - prevScrollHeight);
         }
     } catch (error) {
-        console.error("Failed to load messages:", error);
+        console.log("Failed to load messages:", error);
     } finally {
         loading = false;
     }

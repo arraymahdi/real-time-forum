@@ -11,10 +11,11 @@ document.addEventListener("DOMContentLoaded", () => {
     }
 
     checkAuth();
+    
+    function checkAuth() {
+        if (!localStorage.getItem("token")) {
+            navigateTo("auth");
+        }
+    }
 });
 
-function checkAuth() {
-    if (!localStorage.getItem("token")) {
-        navigateTo("auth");
-    }
-}
