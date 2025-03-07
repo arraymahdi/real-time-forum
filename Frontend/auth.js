@@ -254,7 +254,11 @@ function renderUsers(users, onlineUsers, latestMessagesMap) {
                     userItem.innerHTML = `
                         <span class="status-dot ${onlineUsers.includes(user.id) ? 'online' : 'offline'}"></span>
                         ${user.nickname}
-                        <span class="typing-wave" id="typing-wave-${user.id}" style="display: none;"></span>
+                        <span class="typing-container" id="typing-container-${user.id}" style="display: none;">
+                            <span class="typing-wave"></span>
+                            <span class="typing-wave"></span>
+                            <span class="typing-wave"></span>
+                        </span>
                         <small class="last-message-time">${lastMessageTime}</small>
                     `;
                     userItem.addEventListener("click", () => {
@@ -274,13 +278,13 @@ function renderUsers(users, onlineUsers, latestMessagesMap) {
 function showTypingInUserList(senderId) {
     const userItems = document.querySelectorAll(`.user-item[data-id="${senderId}"]`);
     userItems.forEach(item => {
-        const typingWave = item.querySelector(`#typing-wave-${senderId}`);
-        if (typingWave) typingWave.style.display = "inline-block";
+        const typingContainer = item.querySelector(`#typing-container-${senderId}`);
+        if (typingContainer) typingContainer.style.display = "inline-flex";
     });
     setTimeout(() => {
         userItems.forEach(item => {
-            const typingWave = item.querySelector(`#typing-wave-${senderId}`);
-            if (typingWave) typingWave.style.display = "none";
+            const typingContainer = item.querySelector(`#typing-container-${senderId}`);
+            if (typingContainer) typingContainer.style.display = "none";
         });
     }, 2000);
 }

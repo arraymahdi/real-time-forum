@@ -8,37 +8,43 @@ body {
     overflow-x: hidden;
 }
 
+* {
+    margin: 0;
+    padding: 0;
+    box-sizing: border-box;
+}
+
 /* Header */
 header {
-    position: fixed;
-    top: 0;
-    left: 0;
-    width: 100%;
     height: 70px;
-    background: linear-gradient(135deg, #1e90ff, #007bff);
-    color: white;
-    padding: 0 20px;
+    width: 100%;
+    background: #ffffff;
     display: flex;
     align-items: center;
     justify-content: space-between;
-    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+    padding: 0 20px;
+    box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1);
+    position: fixed;
+    top: 0;
+    left: 0;
     z-index: 1000;
 }
 
 header h1 {
     margin: 0;
-    font-size: clamp(18px, 4vw, 24px); /* Responsive font size */
+    font-size: clamp(18px, 4vw, 24px);
     font-weight: 600;
 }
 
-header a, header button {
+header a,
+header button {
     color: white;
     text-decoration: none;
     padding: 8px 16px;
     border-radius: 20px;
     transition: background 0.3s, transform 0.2s;
     margin-left: 10px;
-    font-size: clamp(12px, 2.5vw, 16px); /* Responsive font size */
+    font-size: clamp(12px, 2.5vw, 16px);
 }
 
 header a.active {
@@ -46,7 +52,8 @@ header a.active {
     font-weight: bold;
 }
 
-header button:hover, header a:hover {
+header button:hover,
+header a:hover {
     background: rgba(255, 255, 255, 0.3);
     transform: translateY(-2px);
 }
@@ -55,43 +62,59 @@ header button:hover, header a:hover {
     background: #ff4d4d;
     border: none;
     cursor: pointer;
-    margin-right: clamp(10px, 2vw, 30px); /* Responsive margin */
+    margin-right: clamp(10px, 2vw, 30px);
 }
 
 #logout-btn:hover {
     background: #e60000;
 }
 
-/* Containers */
-.forum-container, .chat-container {
+/* Main Layout */
+main {
     display: flex;
-    height: calc(100vh - 70px);
-    margin-top: 70px;
+    margin-top: 70px; /* Pushes content below the header */
+    height: calc(100vh - 70px); /* Full height minus header */
     overflow: hidden;
-    flex-direction: row; /* Default for larger screens */
 }
 
 /* Users List */
 .users-list {
-    width: clamp(200px, 20vw, 280px); /* Responsive width */
+    width: clamp(200px, 20vw, 280px);
     background: #ffffff;
-    padding: clamp(10px, 2vw, 20px); /* Responsive padding */
+    padding: clamp(10px, 2vw, 20px);
     border-right: 1px solid #e0e0e0;
-    height: calc(100vh - 70px);
+    height: 100%; /* Full height of the main container */
     overflow-y: auto;
     box-shadow: 2px 0 10px rgba(0, 0, 0, 0.05);
-    flex-shrink: 0; /* Prevent shrinking */
+    flex-shrink: 0;
+    position: fixed;
+    top: 70px; /* Below the header */
+    bottom: 0; /* Extend to bottom */
+    left: 0; /* Attach to the left edge */
+    z-index: 900;
+}
+
+/* Forum & Chat Containers */
+.forum-container,
+.chat-container {
+    display: flex;
+    flex-grow: 1;
+    height: 100%;
+    overflow: hidden;
+    flex-direction: column;
+    margin-left: clamp(200px, 20vw, 280px); /* Offset for users-list width */
 }
 
 /* Posts Container */
 #posts-container {
     flex-grow: 1;
-    padding: clamp(10px, 2vw, 20px); /* Responsive padding */
+    padding: clamp(10px, 2vw, 20px);
     display: grid;
-    grid-template-columns: repeat(auto-fit, minmax(clamp(250px, 30vw, 320px), 1fr)); /* Responsive grid */
-    gap: clamp(10px, 2vw, 20px); /* Responsive gap */
+    grid-template-columns: repeat(auto-fit, minmax(clamp(250px, 30vw, 320px), 1fr));
+    gap: clamp(10px, 2vw, 20px);
     overflow-y: auto;
-    min-height: 0; /* Allow proper flex shrinking */
+    min-height: 0;
+    background: #f9f9f9;
 }
 
 /* Chat Box */
@@ -99,120 +122,33 @@ header button:hover, header a:hover {
     flex-grow: 1;
     display: flex;
     flex-direction: column;
-    background: #ffffff;
-    min-height: 0; /* Allow proper flex shrinking */
+    background: #f9f9f9;
+    padding: 20px;
 }
 
+/* Messages List */
 .messages-list {
-    flex-grow: 1;
-    padding: clamp(10px, 2vw, 20px); /* Responsive padding */
-    overflow-y: auto;
-    background: #fafafa;
     display: flex;
     flex-direction: column;
-    min-height: 0; /* Prevent overflow issues */
+    overflow-y: auto;
+    flex-grow: 1;
+    height: calc(100vh - 110px);
+    padding: 10px;
+    scroll-behavior: smooth;
+    width: 100%;
+    box-sizing: border-box;
 }
 
-/* Fix scrolling empty space */
-.forum-container, .chat-container, .users-list, #posts-container, .messages-list {
-    -webkit-overflow-scrolling: touch; /* Smooth scrolling on touch devices */
-    scrollbar-width: thin; /* Firefox: slim scrollbar */
-    scrollbar-color: #888 #f0f2f5; /* Firefox: scrollbar styling */
-}
-
-.forum-container::-webkit-scrollbar, 
-.chat-container::-webkit-scrollbar, 
-.users-list::-webkit-scrollbar, 
-#posts-container::-webkit-scrollbar, 
-.messages-list::-webkit-scrollbar {
-    width: 8px; /* Chrome/Safari: slim scrollbar */
-}
-
-.forum-container::-webkit-scrollbar-thumb, 
-.chat-container::-webkit-scrollbar-thumb, 
-.users-list::-webkit-scrollbar-thumb, 
-#posts-container::-webkit-scrollbar-thumb, 
-.messages-list::-webkit-scrollbar-thumb {
-    background: #888;
-    border-radius: 4px;
-}
-
-.forum-container::-webkit-scrollbar-track, 
-.chat-container::-webkit-scrollbar-track, 
-.users-list::-webkit-scrollbar-track, 
-#posts-container::-webkit-scrollbar-track, 
-.messages-list::-webkit-scrollbar-track {
-    background: #f0f2f5;
-}
-
-/* User Item */
-.user-item {
-    padding: clamp(8px, 1.5vw, 12px); /* Responsive padding */
-    margin: clamp(3px, 0.5vw, 5px) 0; /* Responsive margin */
-    background: #f8f9fa;
-    border-radius: 8px;
-    cursor: pointer;
-    display: flex;
-    align-items: center;
-    transition: background 0.3s, transform 0.2s;
-}
-
-.user-item:hover {
-    background: #e9ecef;
-    transform: translateX(5px);
-}
-
-.status-dot {
-    width: clamp(8px, 1vw, 12px); /* Responsive size */
-    height: clamp(8px, 1vw, 12px);
-    border-radius: 50%;
-    display: inline-block;
-    margin-right: clamp(5px, 1vw, 10px); /* Responsive margin */
-    box-shadow: 0 0 4px rgba(0, 0, 0, 0.2);
-}
-
-.online { background: #00cc00; }
-.offline { background: #adb5bd; }
-
-.last-message-time {
-    margin-left: auto;
-    color: #6c757d;
-    font-size: clamp(0.7rem, 2vw, 0.85rem); /* Responsive font size */
-}
-
-/* Posts */
-.post {
-    background: #ffffff;
-    padding: clamp(10px, 2vw, 15px); /* Responsive padding */
-    border-radius: 12px;
-    box-shadow: 0 4px 15px rgba(0, 0, 0, 0.1);
-    transition: transform 0.3s, box-shadow 0.3s;
-    word-wrap: break-word;
-    overflow-wrap: break-word;
-    white-space: normal;
-}
-
-.post:hover {
-    transform: translateY(-5px);
-    box-shadow: 0 6px 20px rgba(0, 0, 0, 0.15);
-}
-
-.post img, .post video {
-    max-width: 100%;
-    border-radius: 8px;
-    margin-top: clamp(5px, 1vw, 10px); /* Responsive margin */
-}
-
-/* Messages */
+/* Message Bubble */
 .message {
-    padding: clamp(8px, 1.5vw, 12px) clamp(12px, 2vw, 18px); /* Responsive padding */
-    margin: clamp(5px, 1vw, 8px) 0; /* Responsive margin */
-    border-radius: 20px;
-    max-width: clamp(200px, 50vw, 70%); /* Responsive max-width */
-    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.05);
+    padding-top: 3%;
+    padding-bottom: 2%;
+    padding-left: 2%;
+    padding-right: 3%;
+    margin-bottom: 5px;
+    border-radius: 8px;
+    max-width: 70%;
     word-wrap: break-word;
-    overflow-wrap: break-word;
-    white-space: normal;
 }
 
 .sent {
@@ -228,32 +164,212 @@ header button:hover, header a:hover {
 }
 
 .timestamp {
-    font-size: clamp(0.6rem, 1.5vw, 0.8rem); /* Responsive font size */
+    font-size: clamp(0.6rem, 1.5vw, 0.8rem);
     color: #adb5bd;
-    margin-top: clamp(3px, 0.5vw, 5px); /* Responsive margin */
+    margin-top: clamp(3px, 0.5vw, 5px);
     display: block;
 }
 
+/* Message Input */
 .message-input {
     display: flex;
-    padding: clamp(10px, 2vw, 15px); /* Responsive padding */
-    background: #ffffff;
+    padding: 10px;
+    background: #fff;
     border-top: 1px solid #e0e0e0;
+    position: fixed;
+    bottom: 0;
+    left: clamp(200px, 20vw, 280px); /* Align with users-list width */
+    right: 0; /* Extend to the right edge */
+    z-index: 10;
+    box-sizing: border-box;
+    width: calc(100% - clamp(200px, 20vw, 280px)); /* Adjust width dynamically */
 }
 
 .message-input input {
     flex-grow: 1;
-    padding: clamp(8px, 1.5vw, 10px); /* Responsive padding */
-    border: 1px solid #ced4da;
-    border-radius: 20px;
-    margin-right: clamp(5px, 1vw, 10px); /* Responsive margin */
-    font-size: clamp(0.9rem, 2vw, 1rem); /* Responsive font size */
+    padding: 10px;
+    border: 1px solid #ccc;
+    border-radius: 5px;
+    box-sizing: border-box;
 }
 
 .message-input button {
+    margin-left: 10px;
+    padding: 10px 15px;
+    border: none;
     background: #007bff;
-    padding: clamp(8px, 1.5vw, 10px) clamp(15px, 2.5vw, 20px); /* Responsive padding */
-    border-radius: 20px;
+    color: white;
+    border-radius: 5px;
+    cursor: pointer;
+    box-sizing: border-box;
+}
+
+.message-input button:hover {
+    background: #0056b3;
+}
+
+/* Typing Indicator */
+.typing-indicator {
+    padding: 8px 12px; /* Fixed padding for consistency */
+    margin: 5px 0;
+    max-width: 70%;
+    margin-right: auto;
+    background: #e9ecef; /* Match received message background */
+    border-radius: 15px; /* Slightly softer corners */
+    display: flex;
+    align-items: center;
+    box-sizing: border-box;
+    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.05); /* Subtle shadow for depth */
+}
+
+.typing-wave {
+    display: inline-block;
+    width: 8px;
+    height: 8px;
+    background: #6c757d; /* Darker gray for contrast */
+    border-radius: 50%;
+    margin: 0 3px;
+    animation: wave 2.5s infinite cubic-bezier(0.4, 0, 0.2, 1); /* Smoother easing */
+    vertical-align: middle;
+}
+
+.typing-wave:nth-child(2) {
+    animation-delay: 0.5s;
+}
+
+.typing-wave:nth-child(3) {
+    animation-delay: 1s;
+}
+
+@keyframes wave {
+    0%,
+    100% {
+        transform: translateY(0);
+        opacity: 0.5;
+    }
+    50% {
+        transform: translateY(-5px);
+        opacity: 1;
+    }
+}
+
+/* Typing animation in user list */
+.user-item .typing-container {
+    display: inline-flex;
+    align-items: center;
+    margin-left: 8px; /* Increased spacing for better look */
+}
+
+.user-item .typing-wave {
+    width: 6px;
+    height: 6px;
+    background: #007bff; /* Blue to match sent messages */
+    margin: 0 2px;
+    animation: wave 2.5s infinite cubic-bezier(0.4, 0, 0.2, 1); /* Smoother easing */
+}
+
+/* Fix scrolling empty space */
+.forum-container,
+.chat-container,
+.users-list,
+#posts-container,
+.messages-list {
+    -webkit-overflow-scrolling: touch;
+    scrollbar-width: thin;
+    scrollbar-color: #888 #f0f2f5;
+}
+
+.forum-container::-webkit-scrollbar,
+.chat-container::-webkit-scrollbar,
+.users-list::-webkit-scrollbar,
+#posts-container::-webkit-scrollbar,
+.messages-list::-webkit-scrollbar {
+    width: 8px;
+}
+
+.forum-container::-webkit-scrollbar-thumb,
+.chat-container::-webkit-scrollbar-thumb,
+.users-list::-webkit-scrollbar-thumb,
+#posts-container::-webkit-scrollbar-thumb,
+.messages-list::-webkit-scrollbar-thumb {
+    background: #888;
+    border-radius: 4px;
+}
+
+.forum-container::-webkit-scrollbar-track,
+.chat-container::-webkit-scrollbar-track,
+.users-list::-webkit-scrollbar-track,
+#posts-container::-webkit-scrollbar-track,
+.messages-list::-webkit-scrollbar-track {
+    background: #f0f2f5;
+}
+
+.messages-list::-webkit-scrollbar-track {
+    background: #fafafa;
+}
+
+/* User Item */
+.user-item {
+    padding: clamp(8px, 1.5vw, 12px);
+    margin: clamp(3px, 0.5vw, 5px) 0;
+    background: #f8f9fa;
+    border-radius: 8px;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    transition: background 0.3s, transform 0.2s;
+}
+
+.user-item:hover {
+    background: #e9ecef;
+    transform: translateX(5px);
+}
+
+.status-dot {
+    width: clamp(8px, 1vw, 12px);
+    height: clamp(8px, 1vw, 12px);
+    border-radius: 50%;
+    display: inline-block;
+    margin-right: clamp(5px, 1vw, 10px);
+    box-shadow: 0 0 4px rgba(0, 0, 0, 0.2);
+}
+
+.online {
+    background: #00cc00;
+}
+
+.offline {
+    background: #adb5bd;
+}
+
+.last-message-time {
+    margin-left: auto;
+    color: #6c757d;
+    font-size: clamp(0.7rem, 2vw, 0.85rem);
+}
+
+/* Posts */
+.post {
+    background: #ffffff;
+    padding: clamp(10px, 2vw, 15px);
+    border-radius: 12px;
+    box-shadow: 0 4px 15px rgba(0, 0, 0, 0.1);
+    transition: transform 0.3s, box-shadow 0.3s;
+    word-wrap: break-word;
+    overflow-wrap: break-word;
+    white-space: normal;
+}
+
+.post:hover {
+    transform: translateY(-5px);
+    box-shadow: 0 6px 20px rgba(0, 0, 0, 0.15);
+}
+
+.post img,
+.post video {
+    max-width: 100%;
+    border-radius: 8px;
+    margin-top: clamp(5px, 1vw, 10px);
 }
 
 /* Modals */
@@ -272,30 +388,30 @@ header button:hover, header a:hover {
 
 .modal-content {
     background: #ffffff;
-    padding: clamp(15px, 3vw, 25px); /* Responsive padding */
+    padding: clamp(15px, 3vw, 25px);
     border-radius: 12px;
-    max-width: clamp(300px, 80vw, 500px); /* Responsive max-width */
+    max-width: clamp(300px, 80vw, 500px);
     width: 90%;
     box-shadow: 0 10px 30px rgba(0, 0, 0, 0.2);
     position: relative;
     word-wrap: break-word;
     overflow-wrap: break-word;
     white-space: normal;
+    overflow-y: auto;
+    max-height: 90vh;
 }
 
-/* Ensure images inside modal scale down */
 .modal-content img {
-    max-width: 100%; /* Ensure image doesn’t exceed modal width */
-    max-height: 50vh; /* Limit height to half the viewport height */
-    width: auto; /* Maintain aspect ratio */
-    height: auto; /* Maintain aspect ratio */
-    object-fit: contain; /* Scale image to fit while preserving aspect ratio */
+    max-width: 100%;
+    max-height: 50vh;
+    width: auto;
+    height: auto;
+    object-fit: contain;
     border-radius: 8px;
     margin-top: clamp(5px, 1vw, 10px);
-    display: block; /* Remove any inline spacing issues */
+    display: block;
 }
 
-/* Video styles for consistency */
 .modal-content video {
     max-width: 100%;
     max-height: 50vh;
@@ -309,28 +425,28 @@ header button:hover, header a:hover {
 .modal-content input,
 .modal-content textarea {
     width: 100%;
-    padding: clamp(8px, 1.5vw, 12px); /* Responsive padding */
-    margin: clamp(5px, 1vw, 10px) 0; /* Responsive margin */
+    padding: clamp(8px, 1.5vw, 12px);
+    margin: clamp(5px, 1vw, 10px) 0;
     border: 1px solid #ced4da;
     border-radius: 8px;
     box-sizing: border-box;
-    font-size: clamp(0.9rem, 2vw, 1rem); /* Responsive font size */
+    font-size: clamp(0.9rem, 2vw, 1rem);
 }
 
 .modal-content textarea {
-    min-height: clamp(80px, 15vh, 100px); /* Responsive height */
+    min-height: clamp(80px, 15vh, 100px);
     resize: vertical;
 }
 
 .modal-content input[type="file"] {
-    padding: clamp(3px, 0.5vw, 5px) 0; /* Responsive padding */
+    padding: clamp(3px, 0.5vw, 5px) 0;
 }
 
 .close {
     position: absolute;
-    top: clamp(5px, 1vw, 10px); /* Responsive positioning */
+    top: clamp(5px, 1vw, 10px);
     right: clamp(10px, 1.5vw, 15px);
-    font-size: clamp(18px, 3vw, 24px); /* Responsive font size */
+    font-size: clamp(18px, 3vw, 24px);
     cursor: pointer;
     color: #555;
 }
@@ -340,13 +456,14 @@ header button:hover, header a:hover {
 }
 
 /* Auth Styles */
-.auth-container, .auth-modal-content {
+.auth-container,
+.auth-modal-content {
     background: #ffffff;
-    padding: clamp(15px, 3vw, 20px); /* Responsive padding */
+    padding: clamp(15px, 3vw, 20px);
     border-radius: 12px;
     box-shadow: 0 4px 15px rgba(0, 0, 0, 0.1);
     width: 90%;
-    max-width: clamp(300px, 60vw, 350px); /* Responsive max-width */
+    max-width: clamp(300px, 60vw, 350px);
     text-align: center;
     position: absolute;
     top: 50%;
@@ -354,34 +471,35 @@ header button:hover, header a:hover {
     transform: translate(-50%, -50%);
 }
 
-.auth-input, .auth-select {
+.auth-input,
+.auth-select {
     width: 100%;
-    padding: clamp(8px, 1.5vw, 12px); /* Responsive padding */
-    margin: clamp(5px, 1vw, 10px) 0; /* Responsive margin */
+    padding: clamp(8px, 1.5vw, 12px);
+    margin: clamp(5px, 1vw, 10px) 0;
     border: 1px solid #ced4da;
     border-radius: 8px;
     box-sizing: border-box;
-    font-size: clamp(0.9rem, 2vw, 1rem); /* Responsive font size */
+    font-size: clamp(0.9rem, 2vw, 1rem);
 }
 
 /* Comments */
 .comments-section {
-    margin-top: clamp(10px, 2vw, 20px); /* Responsive margin */
+    margin-top: clamp(10px, 2vw, 20px);
     border-top: 1px solid #e0e0e0;
-    padding-top: clamp(10px, 2vw, 15px); /* Responsive padding */
+    padding-top: clamp(10px, 2vw, 15px);
 }
 
 .comments-container {
-    max-height: clamp(150px, 30vh, 200px); /* Responsive height */
+    max-height: clamp(150px, 30vh, 200px);
     overflow-y: auto;
-    padding: clamp(5px, 1vw, 10px); /* Responsive padding */
+    padding: clamp(5px, 1vw, 10px);
     background: #f8f9fa;
     border-radius: 8px;
 }
 
 .comment {
-    padding: clamp(5px, 1vw, 8px); /* Responsive padding */
-    margin-bottom: clamp(3px, 0.5vw, 5px); /* Responsive margin */
+    padding: clamp(5px, 1vw, 8px);
+    margin-bottom: clamp(3px, 0.5vw, 5px);
     background: #ffffff;
     border-radius: 8px;
     box-shadow: 0 2px 4px rgba(0, 0, 0, 0.05);
@@ -393,8 +511,8 @@ header button:hover, header a:hover {
 
 .comment-input {
     width: 100%;
-    padding: clamp(8px, 1.5vw, 10px); /* Responsive padding */
-    margin-top: clamp(5px, 1vw, 10px); /* Responsive margin */
+    padding: clamp(8px, 1.5vw, 10px);
+    margin-top: clamp(5px, 1vw, 10px);
     border: 1px solid #ced4da;
     border-radius: 20px;
 }
@@ -402,13 +520,13 @@ header button:hover, header a:hover {
 /* Buttons */
 button {
     background: #007bff;
-    padding: clamp(8px, 1.5vw, 10px) clamp(15px, 2.5vw, 20px); /* Responsive padding */
+    padding: clamp(8px, 1.5vw, 10px) clamp(15px, 2.5vw, 20px);
     border: none;
     color: white;
     border-radius: 20px;
     cursor: pointer;
     transition: background 0.3s, transform 0.2s;
-    font-size: clamp(0.9rem, 2vw, 1rem); /* Responsive font size */
+    font-size: clamp(0.9rem, 2vw, 1rem);
 }
 
 button:hover {
@@ -418,110 +536,102 @@ button:hover {
 
 /* Category Styles */
 .category-section {
-    margin-bottom: clamp(10px, 2vw, 20px); /* Responsive margin */
+    margin-bottom: clamp(10px, 2vw, 20px);
 }
 
 .category-header {
-    font-size: clamp(1.2rem, 3vw, 1.5rem); /* Responsive font size */
+    font-size: clamp(1.2rem, 3vw, 1.5rem);
     font-weight: 600;
-    margin-bottom: clamp(5px, 1vw, 10px); /* Responsive margin */
+    margin-bottom: clamp(5px, 1vw, 10px);
     border-bottom: 2px solid #e0e0e0;
 }
 
 .category-posts {
     display: flex;
     flex-direction: column;
-    gap: clamp(10px, 2vw, 15px); /* Responsive gap */
+    gap: clamp(10px, 2vw, 15px);
 }
 
 .no-messages {
     text-align: center;
     color: #6c757d;
     font-style: italic;
-    margin-top: clamp(10px, 2vw, 20px); /* Responsive margin */
+    margin-top: clamp(10px, 2vw, 20px);
 }
 
-/* Typing Indicator in Messages */
-.typing-indicator {
-    padding: clamp(8px, 1.5vw, 12px) clamp(12px, 2vw, 18px); /* Responsive padding */
-    margin: clamp(5px, 1vw, 8px) 0; /* Responsive margin */
-    max-width: clamp(200px, 50vw, 70%); /* Responsive max-width */
-    margin-right: auto; /* Align with received messages */
+#explore-posts-btn{
+    color: black;
 }
 
-.typing-wave {
-    display: inline-block;
-    width: clamp(15px, 2vw, 20px); /* Responsive width */
-    height: clamp(4px, 0.5vw, 5px); /* Responsive height */
-    background: linear-gradient(90deg, #007bff, #1e90ff);
-    border-radius: 3px;
-    animation: pulse 1.5s infinite ease-in-out;
-    vertical-align: middle;
-    margin-left: clamp(3px, 0.5vw, 5px); /* Responsive margin */
-}
-
-@keyframes pulse {
-    0%, 100% {
-        transform: scale(1);
-        opacity: 0.6;
-    }
-    50% {
-        transform: scale(1.2);
-        opacity: 1;
-    }
+#messages-btn{
+    background-color: #0056b3;
 }
 
 /* Responsive Adjustments */
 @media (max-width: 768px) {
-    .forum-container, .chat-container {
-        flex-direction: column; /* Stack vertically on smaller screens */
+    .forum-container,
+    .chat-container {
+        flex-direction: column;
+        margin-left: 0; /* Remove margin on mobile */
     }
 
     .users-list {
-        width: 100%; /* Full width on smaller screens */
-        height: auto; /* Allow natural height */
-        max-height: 30vh; /* Limit height on mobile */
+        width: 100%;
+        height: auto;
+        max-height: 30vh;
         border-right: none;
         border-bottom: 1px solid #e0e0e0;
+        position: relative; /* Reset to normal flow on mobile */
+        top: 0;
     }
 
     #posts-container {
-        padding: 10px; /* Reduced padding on mobile */
+        padding: 10px;
     }
 
     .chat-box {
-        height: auto; /* Allow natural height */
+        height: auto;
     }
 
     .messages-list {
-        max-height: 60vh; /* Limit height on mobile */
+        height: calc(100vh - 70px - 60px - 30vh); /* Adjust for header, message-input, and users-list */
+    }
+
+    .message-input {
+        position: fixed;
+        left: 0; /* Full width on mobile */
+        right: 0;
+        width: 100%;
     }
 
     header {
-        flex-wrap: wrap; /* Allow wrapping if needed */
-        padding: 10px; /* Reduced padding on mobile */
-        height: auto; /* Allow natural height */
+        flex-wrap: wrap;
+        padding: 10px;
+        height: auto;
     }
 
-    header a, header button {
-        margin: 5px; /* Reduced margin on mobile */
+    header a,
+    header button {
+        margin: 5px;
     }
 
-    #logout-btn, #messages-btn {
-        margin-right: 10px; /* Adjusted for mobile */
+    #logout-btn,
+    #messages-btn {
+        margin-right: 10px;
     }
 }
 
 @media (max-width: 480px) {
     .message {
-        max-width: 85%; /* Wider messages on very small screens */
+        max-width: 85%;
     }
 
     .modal-content {
-        padding: 15px; /* Reduced padding on very small screens */
+        padding: 15px;
     }
 
-    .auth-container, .auth-modal-content {
-        padding: 15px; /* Reduced padding on very small screens */
+    .auth-container,
+    .auth-modal-content {
+        padding: 15px;
     }
 }

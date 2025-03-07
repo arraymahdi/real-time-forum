@@ -64,7 +64,8 @@ async function loadMessages(receiverID) {
     selectedReceiverID = receiverID;
     offset = 0;
     messages = [];
-    document.getElementById("messages-list").innerHTML = "";
+    const messageList = document.getElementById("messages-list");
+    messageList.innerHTML = ""; // Clear existing content, including typing indicators
     console.log(`Loading messages for receiver ID: ${receiverID}`);
     await fetchMessages();
 }
@@ -85,7 +86,7 @@ async function fetchMessages() {
 
         if (newMessages.length > 0) {
             newMessages.reverse();
-            messages = [...newMessages, ...messages];
+            messages = [...newMessages.filter(msg => !msg.type || msg.type !== "typing"), ...messages]; // Filter out typing events
             offset += newMessages.length;
             renderMessages();
             messageList.scrollTop = prevScrollTop + (messageList.scrollHeight - prevScrollHeight);
@@ -131,14 +132,16 @@ function displayMessage(msg, isSender) {
         return;
     }
 
-    // Regular message
-    const msgDiv = document.createElement("div");
-    msgDiv.classList.add("message", isSender ? "sent" : "received");
-    msgDiv.innerHTML = `
-        <p>${msg.content}</p>
-        <span class="timestamp">${timeAgo(new Date(msg.sent_at))}</span>
-    `;
-    messageList.appendChild(msgDiv);
+    // Regular message (only if not a typing event)
+    if (!msg.type || msg.type !== "typing") {
+        const msgDiv = document.createElement("div");
+        msgDiv.classList.add("message", isSender ? "sent" : "received");
+        msgDiv.innerHTML = `
+            <p>${msg.content}</p>
+            <span class="timestamp">${timeAgo(new Date(msg.sent_at))}</span>
+        `;
+        messageList.appendChild(msgDiv);
+    }
 }
 
 function timeAgo(date) {
