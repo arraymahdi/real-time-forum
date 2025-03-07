@@ -66,7 +66,7 @@ async function login() {
         console.error("Login error:", error);
         alert(error.message);
     }
-    initializeUsers()
+    initializeUsers();
 }
 
 async function register() {
@@ -100,13 +100,15 @@ async function register() {
 }
 
 function logout() {
+    if (socket) {
+        socket.close();
+    }
     localStorage.removeItem("token");
     console.log("Logged out, token removed");
     document.getElementById("auth-section").style.display = "block";
     document.getElementById("forum-section").style.display = "none";
     document.getElementById("messages-section").style.display = "none";
 }
-
 
 let socket = null;
 let currentUserID = null;
@@ -136,18 +138,26 @@ function initializeUsers() {
             console.log("User connected, currentUserID set to:", currentUserID);
             await fetchAndSortUsers();
         } else if (data.type === "online_users") {
-            console.log("Updating online users:", data.online_users);
+            console.log("Real-time online users update:", data.online_users);
             updateOnlineUsers(data.online_users);
         } else if (data.sender_id && data.receiver_id) {
             if (data.receiver_id === currentUserID || data.sender_id === currentUserID) {
                 console.log("New message received:", data);
                 displayMessage(data, data.sender_id === currentUserID);
-                await fetchAndSortUsers();
+                if (data.type === "typing" && data.sender_id !== currentUserID) {
+                    showTypingInUserList(data.sender_id);
+                } else {
+                    await fetchAndSortUsers();
+                }
             }
         }
     };
 
-    socket.onclose = () => console.log("WebSocket connection closed.");
+    socket.onclose = () => {
+        console.log("WebSocket connection closed.");
+        currentUserID = null;
+    };
+
     socket.onerror = (error) => console.error("WebSocket error:", error);
 
     // Fallback: If WebSocket fails or no users load after 3 seconds, try a direct fetch
@@ -170,10 +180,10 @@ async function fetchAndSortUsers() {
     console.log("Fetching users for user_id:", currentUserID);
     try {
         const [usersResponse, onlineResponse] = await Promise.all([
-            fetch(`${API_BASE_URL}/getSortedUsers?user_id=${currentUserID}`, {
+            fetch(`http://localhost:8088/getSortedUsers?user_id=${currentUserID}`, {
                 headers: { "Authorization": `Bearer ${localStorage.getItem("token")}` }
             }),
-            fetch(`${API_BASE_URL}/online`, {
+            fetch(`http://localhost:8088/online`, {
                 headers: { "Authorization": `Bearer ${localStorage.getItem("token")}` }
             }),
         ]);
@@ -184,7 +194,7 @@ async function fetchAndSortUsers() {
         const users = await usersResponse.json() || [];
         const onlineUsers = await onlineResponse.json() || [];
         console.log("Fetched users:", users);
-        console.log("Fetched online users:", onlineUsers);
+        console.log("Fetched online users (initial):", onlineUsers);
 
         const latestMessagesMap = await getLatestMessageTimestamps(users);
         console.log("Latest messages map:", latestMessagesMap);
@@ -210,7 +220,7 @@ async function getLatestMessageTimestamps(users) {
     for (const user of users) {
         if (user.id !== currentUserID) {
             try {
-                const response = await fetch(`${API_BASE_URL}/messages?user1=${currentUserID}&user2=${user.id}&offset=0`, {
+                const response = await fetch(`http://localhost:8088/messages?user1=${currentUserID}&user2=${user.id}&offset=0`, {
                     headers: { "Authorization": `Bearer ${localStorage.getItem("token")}` }
                 });
                 if (!response.ok) throw new Error(`Failed to fetch messages for user ${user.id}: ${response.status}`);
@@ -243,7 +253,9 @@ function renderUsers(users, onlineUsers, latestMessagesMap) {
                         : "No messages";
                     userItem.innerHTML = `
                         <span class="status-dot ${onlineUsers.includes(user.id) ? 'online' : 'offline'}"></span>
-                        ${user.nickname} <small class="last-message-time">${lastMessageTime}</small>
+                        ${user.nickname}
+                        <span class="typing-wave" id="typing-wave-${user.id}" style="display: none;"></span>
+                        <small class="last-message-time">${lastMessageTime}</small>
                     `;
                     userItem.addEventListener("click", () => {
                         document.getElementById("chat-header").textContent = `Chat with ${user.nickname}`;
@@ -259,18 +271,33 @@ function renderUsers(users, onlineUsers, latestMessagesMap) {
     });
 }
 
+function showTypingInUserList(senderId) {
+    const userItems = document.querySelectorAll(`.user-item[data-id="${senderId}"]`);
+    userItems.forEach(item => {
+        const typingWave = item.querySelector(`#typing-wave-${senderId}`);
+        if (typingWave) typingWave.style.display = "inline-block";
+    });
+    setTimeout(() => {
+        userItems.forEach(item => {
+            const typingWave = item.querySelector(`#typing-wave-${senderId}`);
+            if (typingWave) typingWave.style.display = "none";
+        });
+    }, 2000);
+}
+
 function updateOnlineUsers(onlineUsers) {
     console.log("Updating online status for users:", onlineUsers);
     document.querySelectorAll(".user-item").forEach(userItem => {
         const userId = parseInt(userItem.dataset.id);
         const statusDot = userItem.querySelector(".status-dot");
-        if (onlineUsers.includes(userId)) {
-            statusDot.classList.add("online");
-            statusDot.classList.remove("offline");
-        } else {
-            statusDot.classList.add("offline");
-            statusDot.classList.remove("online");
+        if (statusDot) {
+            if (onlineUsers.includes(userId)) {
+                statusDot.classList.add("online");
+                statusDot.classList.remove("offline");
+            } else {
+                statusDot.classList.add("offline");
+                statusDot.classList.remove("online");
+            }
         }
     });
 }
-

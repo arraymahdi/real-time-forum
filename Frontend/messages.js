@@ -2,6 +2,7 @@
 let messages = [];
 let offset = 0;
 let loading = false;
+let typingTimeout;
 
 document.addEventListener("DOMContentLoaded", () => {
     const token = localStorage.getItem("token");
@@ -32,8 +33,26 @@ document.addEventListener("DOMContentLoaded", () => {
     });
 
     document.getElementById("send-btn").addEventListener("click", sendMessage);
-    document.getElementById("message-content").addEventListener("keypress", (e) => {
+    
+    const messageInput = document.getElementById("message-content");
+    messageInput.addEventListener("keypress", (e) => {
         if (e.key === "Enter") sendMessage();
+    });
+
+    // Add typing event listener (broadcast to receiver)
+    messageInput.addEventListener("input", () => {
+        if (!socket || socket.readyState !== WebSocket.OPEN) return;
+
+        clearTimeout(typingTimeout);
+        socket.send(JSON.stringify({
+            sender_id: currentUserID,
+            receiver_id: selectedReceiverID,
+            type: "typing"
+        }));
+
+        typingTimeout = setTimeout(() => {
+            // Could send a "stopped typing" message here if desired
+        }, 2000);
     });
 });
 
@@ -91,6 +110,28 @@ function renderMessages() {
 
 function displayMessage(msg, isSender) {
     const messageList = document.getElementById("messages-list");
+
+    // Typing indicator for receiver only
+    if (msg.type === "typing" && !isSender && msg.sender_id === selectedReceiverID) {
+        const existingTyping = document.getElementById("typing-indicator");
+        if (!existingTyping) {
+            const typingDiv = document.createElement("div");
+            typingDiv.id = "typing-indicator";
+            typingDiv.classList.add("typing-indicator");
+            typingDiv.innerHTML = `<span class="typing-wave"></span>`;
+            messageList.appendChild(typingDiv);
+            messageList.scrollTop = messageList.scrollHeight;
+
+            // Remove typing indicator after 2 seconds
+            setTimeout(() => {
+                const typingElement = document.getElementById("typing-indicator");
+                if (typingElement) typingElement.remove();
+            }, 2000);
+        }
+        return;
+    }
+
+    // Regular message
     const msgDiv = document.createElement("div");
     msgDiv.classList.add("message", isSender ? "sent" : "received");
     msgDiv.innerHTML = `

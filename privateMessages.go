@@ -23,6 +23,7 @@ type Message struct {
 	ReceiverID int    `json:"receiver_id"`
 	Content    string `json:"content"`
 	SentAt     string `json:"sent_at"`
+	Type       string `json:"type,omitempty"` // Added for typing notification
 }
 
 type Client struct {
@@ -74,8 +75,6 @@ func handleConnections(w http.ResponseWriter, r *http.Request) {
 		delete(clients, userID)
 		clientsMux.Unlock()
 		log.Printf("User %d disconnected", userID)
-
-		// Notify all clients about the user going offline
 		broadcastOnlineUsers()
 	}()
 
@@ -94,8 +93,12 @@ func handleConnections(w http.ResponseWriter, r *http.Request) {
 		msg.SenderID = userID
 		msg.SentAt = time.Now().Format(time.RFC3339)
 
-		saveMessage(msg)
-		forwardMessage(msg)
+		if msg.Type == "typing" {
+			broadcastTyping(msg)
+		} else {
+			saveMessage(msg)
+			forwardMessage(msg)
+		}
 	}
 }
 
@@ -107,7 +110,6 @@ func broadcastOnlineUsers() {
 	}
 	clientsMux.Unlock()
 
-	// Send the updated online users list to all clients
 	notification := map[string]interface{}{
 		"type":         "online_users",
 		"online_users": onlineUsers,
@@ -120,8 +122,19 @@ func broadcastOnlineUsers() {
 	clientsMux.Unlock()
 }
 
+func broadcastTyping(msg Message) {
+	clientsMux.Lock()
+	receiver, exists := clients[msg.ReceiverID]
+	clientsMux.Unlock()
+
+	if exists {
+		receiver.conn.WriteJSON(msg)
+	}
+}
+
 func saveMessage(msg Message) {
-	_, err := db.Exec("INSERT INTO messages (sender_id, receiver_id, content, sent_at) VALUES (?, ?, ?, ?)", msg.SenderID, msg.ReceiverID, msg.Content, msg.SentAt)
+	_, err := db.Exec("INSERT INTO messages (sender_id, receiver_id, content, sent_at) VALUES (?, ?, ?, ?)",
+		msg.SenderID, msg.ReceiverID, msg.Content, msg.SentAt)
 	if err != nil {
 		log.Println("Failed to save message:", err)
 	}
@@ -133,7 +146,7 @@ func forwardMessage(msg Message) {
 	clientsMux.Unlock()
 
 	if exists {
-		msg.SentAt = time.Now().Format(time.RFC3339) // Ensure correct timestamp before sending
+		msg.SentAt = time.Now().Format(time.RFC3339)
 		receiver.conn.WriteJSON(msg)
 	}
 }
@@ -142,7 +155,7 @@ func getMessagesHandler(w http.ResponseWriter, r *http.Request) {
 	var userID1, userID2, offset int
 	fmt.Sscanf(r.URL.Query().Get("user1"), "%d", &userID1)
 	fmt.Sscanf(r.URL.Query().Get("user2"), "%d", &userID2)
-	fmt.Sscanf(r.URL.Query().Get("offset"), "%d", &offset) // Offset for pagination
+	fmt.Sscanf(r.URL.Query().Get("offset"), "%d", &offset)
 
 	rows, err := db.Query(`
 		SELECT sender_id, receiver_id, content, sent_at 
@@ -187,7 +200,6 @@ func getSortedUsersHandler(w http.ResponseWriter, r *http.Request) {
 	var userID int
 	fmt.Sscanf(r.URL.Query().Get("user_id"), "%d", &userID)
 
-	// Step 1: Query users who have at least one message with the given user and get their nickname
 	rows, err := db.Query(`
         SELECT DISTINCT u.id, u.nickname, MAX(m.sent_at) as last_message_time
         FROM users u
@@ -223,7 +235,6 @@ func getSortedUsersHandler(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	// Step 2: Query users who have no chat with the given user and get their nickname
 	rows2, err := db.Query(`
         SELECT id, nickname
         FROM users
@@ -259,14 +270,12 @@ func getSortedUsersHandler(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	// Combine both lists
 	var sortedUsers []struct {
 		ID              int    `json:"id"`
 		LastMessageTime string `json:"last_message_time"`
 		Nickname        string `json:"nickname"`
 	}
 
-	// Append users with messages
 	for _, user := range usersWithMessages {
 		sortedUsers = append(sortedUsers, struct {
 			ID              int    `json:"id"`
@@ -279,7 +288,6 @@ func getSortedUsersHandler(w http.ResponseWriter, r *http.Request) {
 		})
 	}
 
-	// Append users with no messages (sorted alphabetically by nickname)
 	for _, user := range usersNoMessages {
 		sortedUsers = append(sortedUsers, struct {
 			ID              int    `json:"id"`
@@ -291,7 +299,6 @@ func getSortedUsersHandler(w http.ResponseWriter, r *http.Request) {
 		})
 	}
 
-	// Respond with the sorted list
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(sortedUsers)
 }

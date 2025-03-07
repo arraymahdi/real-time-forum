@@ -25,11 +25,12 @@
         <!-- Signup Modal -->
         <div id="signup-modal" class="modal" style="display: none;">
             <div class="auth-modal-content">
-                <span class="close" id="close-signup">&times;</span>
+                <span class="close" id="close-signup">×</span>
                 <h2>Sign Up</h2>
                 <input class="auth-input" type="text" id="register-nickname" placeholder="Nickname">
                 <input class="auth-input" type="number" id="register-age" placeholder="Age">
                 <select class="auth-select" id="register-gender">
+                    <option value="" disabled selected>Gender</option>
                     <option value="Male">Male</option>
                     <option value="Female">Female</option>
                     <option value="Other">Other</option>
@@ -60,10 +61,10 @@
         <!-- Create Post Modal -->
         <div id="create-post-modal" class="modal" style="display: none;">
             <div class="modal-content">
-                <span class="close">&times;</span>
+                <span class="close">×</span>
                 <h2>Create Post</h2>
                 <input type="text" id="post-title" placeholder="Title" required>
-                <input type="text" id="post-category" placeholder="Category">
+                <input type="text" id="post-category" placeholder="Category (optional)">
                 <textarea id="post-content" placeholder="Write your post..." required></textarea>
                 <input type="file" id="post-image" accept="image/*">
                 <input type="file" id="post-video" accept="video/*">
@@ -74,7 +75,7 @@
         <!-- View Post Modal -->
         <div id="view-post-modal" class="modal" style="display: none;">
             <div class="modal-content">
-                <span class="close">&times;</span>
+                <span class="close">×</span>
                 <h2 id="modal-title"></h2>
                 <p id="modal-author"></p>
                 <p id="modal-content"></p>
