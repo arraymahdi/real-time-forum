@@ -42,6 +42,8 @@ func main() {
 	http.HandleFunc("/following", disableCORS(jwtMiddleware(getFollowingHandler)))
 	http.HandleFunc("/user/follow-status", disableCORS(jwtMiddleware(getUserFollowStatusHandler)))
 
+	http.HandleFunc("/groups/create", jwtMiddleware(createGroupHandler))
+
 	http.HandleFunc("/users", disableCORS(getAllUsersHandler))
 
 	fmt.Println("Server running on port 8088")
