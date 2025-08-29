@@ -208,14 +208,14 @@ func getFollowersHandler(w http.ResponseWriter, r *http.Request) {
 	}
 
 	rows, err := db.Query(`
-		SELECT u.id, u.nickname, u.first_name, u.last_name, u.email, f.created_at
+		SELECT u.id, u.nickname, u.first_name, u.last_name, u.email, f.requested_at
 		FROM users u
 		JOIN followers f ON u.id = f.follower_id
 		WHERE f.following_id = ?
-		ORDER BY f.created_at DESC
+		ORDER BY f.requested_at DESC
 	`, userID)
 	if err != nil {
-		log.Printf("Database error querying followers for user_id %d: %v", userID, err)
+		log.Printf("Database error querying followers for id %d: %v", userID, err)
 		http.Error(w, "Database error retrieving followers", http.StatusInternalServerError)
 		return
 	}
@@ -278,14 +278,14 @@ func getFollowingHandler(w http.ResponseWriter, r *http.Request) {
 	}
 
 	rows, err := db.Query(`
-		SELECT u.id, u.nickname, u.first_name, u.last_name, u.email, f.created_at
+		SELECT u.id, u.nickname, u.first_name, u.last_name, u.email, f.requested_at
 		FROM users u
 		JOIN followers f ON u.id = f.following_id
 		WHERE f.follower_id = ?
-		ORDER BY f.created_at DESC
+		ORDER BY f.requested_at DESC
 	`, userID)
 	if err != nil {
-		log.Printf("Database error querying following for user_id %d: %v", userID, err)
+		log.Printf("Database error querying following for id %d: %v", userID, err)
 		http.Error(w, "Database error retrieving following", http.StatusInternalServerError)
 		return
 	}
