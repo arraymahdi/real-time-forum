@@ -26,8 +26,8 @@ func main() {
 	http.HandleFunc("/upload-avatar", disableCORS(uploadAvatarHandler))
 
 	http.HandleFunc("/posts", disableCORS(jwtMiddleware(createPostHandler)))
-	http.HandleFunc("/posts/all", disableCORS(getPostsHandler))
-	http.HandleFunc("/post/", disableCORS(GetPostByIDHandler))
+	http.HandleFunc("/posts/all", disableCORS(jwtMiddleware(getPostsHandler)))
+	http.HandleFunc("/post/", disableCORS(jwtMiddleware(GetPostByIDHandler)))
 	http.HandleFunc("/comments", disableCORS(jwtMiddleware(createCommentHandler)))
 	http.HandleFunc("/comments/all", disableCORS(getCommentsByPostHandler))
 
