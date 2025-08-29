@@ -8,6 +8,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"log"
 	"net/http"
 	"os"
 	"path/filepath"
@@ -17,213 +18,184 @@ import (
 	"golang.org/x/crypto/bcrypt"
 )
 
-type Gender string
-
-const (
-	Male   Gender = "Male"
-	Female Gender = "Female"
-	Other  Gender = "Other"
-)
-
-type User struct {
-	ID        int    `json:"id"`
-	Nickname  string `json:"nickname"`
-	Age       int    `json:"age"`
-	Gender    Gender `json:"gender"`
-	FirstName string `json:"first_name"`
-	LastName  string `json:"last_name"`
-	Email     string `json:"email"`
-	Password  string `json:"password"`
-	Avatar    string `json:"avatar"`
-}
-
-const (
-	avatarDir = "../uploads/avatars"
-)
+// -------------------- Constants --------------------
+const avatarDir = "./uploads/avatars"
 
 var jwtSecret = []byte("love-love-love")
 
-// base64Encode encodes data to base64 URL encoding without padding.
-func base64Encode(data []byte) string {
-	return base64.RawURLEncoding.EncodeToString(data)
+// -------------------- Models --------------------
+type User struct {
+	ID          int    `json:"id"`
+	Email       string `json:"email"`
+	Password    string `json:"password,omitempty"`
+	FirstName   string `json:"first_name"`
+	LastName    string `json:"last_name"`
+	DateOfBirth string `json:"date_of_birth"`
+	Avatar      string `json:"avatar"`
+	Nickname    string `json:"nickname"`
+	AboutMe     string `json:"about_me"`
+	ProfileType string `json:"profile_type"`
 }
 
-// signHMACSHA256 creates an HMAC-SHA256 signature.
+// -------------------- JWT Utilities --------------------
 func signHMACSHA256(message, secret []byte) []byte {
 	h := hmac.New(sha256.New, secret)
 	h.Write(message)
 	return h.Sum(nil)
 }
 
-// generateJWT manually generates a JWT token.
-func generateJWT(userID int, email string) (string, error) {
-	header := map[string]string{
-		"alg": "HS256",
-		"typ": "JWT",
-	}
-	headerJSON, _ := json.Marshal(header)
+// keep verifyHMACSHA256
+func verifyHMACSHA256(message, secret, signature []byte) bool {
+	expected := signHMACSHA256(message, secret)
+	return hmac.Equal(expected, signature)
+}
 
+func base64Encode(data []byte) string {
+	return base64.RawURLEncoding.EncodeToString(data)
+}
+
+func base64Decode(data string) ([]byte, error) {
+	return base64.RawURLEncoding.DecodeString(data)
+}
+
+func generateJWT(userID int, email string) (string, error) {
+	header := map[string]string{"alg": "HS256", "typ": "JWT"}
 	payload := map[string]interface{}{
-		"user_id": userID,
-		"email":   email,
-		"exp":     time.Now().Add(time.Hour * 24).Unix(),
+		"id":    userID,
+		"email": email,
+		"exp":   time.Now().Add(24 * time.Hour).Unix(),
 	}
+
+	headerJSON, _ := json.Marshal(header)
 	payloadJSON, _ := json.Marshal(payload)
 
-	headerEncoded := base64Encode(headerJSON)
-	payloadEncoded := base64Encode(payloadJSON)
+	headerEnc := base64Encode(headerJSON)
+	payloadEnc := base64Encode(payloadJSON)
+	signature := base64Encode(signHMACSHA256([]byte(headerEnc+"."+payloadEnc), jwtSecret))
 
-	// Create the signature
-	signature := signHMACSHA256([]byte(headerEncoded+"."+payloadEncoded), jwtSecret)
-	signatureEncoded := base64Encode(signature)
-
-	// Concatenate all parts to form the final JWT
-	return fmt.Sprintf("%s.%s.%s", headerEncoded, payloadEncoded, signatureEncoded), nil
+	token := fmt.Sprintf("%s.%s.%s", headerEnc, payloadEnc, signature)
+	log.Printf("[JWT] Generated token for id=%d", userID)
+	return token, nil
 }
 
-func isValidGender(g Gender) bool {
-	return g == Male || g == Female || g == Other
+func ExtractUserIDFromToken(token string) (int, error) {
+	parts := strings.Split(token, ".")
+	if len(parts) != 3 {
+		return 0, errors.New("invalid token format")
+	}
+
+	headerPayload := parts[0] + "." + parts[1]
+	sig, err := base64Decode(parts[2])
+	if err != nil {
+		return 0, err
+	}
+
+	if !verifyHMACSHA256([]byte(headerPayload), jwtSecret, sig) {
+		return 0, errors.New("invalid token signature")
+	}
+
+	payloadJSON, err := base64Decode(parts[1])
+	if err != nil {
+		return 0, err
+	}
+
+	var claims map[string]interface{}
+	if err := json.Unmarshal(payloadJSON, &claims); err != nil {
+		return 0, err
+	}
+
+	if uid, ok := claims["id"].(float64); ok {
+		return int(uid), nil
+	}
+	return 0, errors.New("id not found")
 }
 
+// -------------------- Handlers --------------------
 func registerHandler(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodPost {
-		http.Error(w, "Invalid request method", http.StatusMethodNotAllowed)
+		http.Error(w, "Invalid method", http.StatusMethodNotAllowed)
 		return
 	}
 
 	var user User
 	if err := json.NewDecoder(r.Body).Decode(&user); err != nil {
-		http.Error(w, "Invalid request payload", http.StatusBadRequest)
+		log.Printf("[Register] JSON decode error: %v", err)
+		http.Error(w, "Invalid payload", http.StatusBadRequest)
 		return
 	}
 
-	if !isValidGender(user.Gender) {
-		http.Error(w, "Invalid gender", http.StatusBadRequest)
-		return
-	}
-
-	hashedPassword, err := bcrypt.GenerateFromPassword([]byte(user.Password), bcrypt.DefaultCost)
+	hashed, err := bcrypt.GenerateFromPassword([]byte(user.Password), bcrypt.DefaultCost)
 	if err != nil {
-		http.Error(w, "Error hashing password", http.StatusInternalServerError)
+		log.Printf("[Register] Password hash error: %v", err)
+		http.Error(w, "Internal error", http.StatusInternalServerError)
 		return
 	}
 
-	_, err = db.Exec("INSERT INTO users (nickname, age, gender, first_name, last_name, email, password) VALUES (?, ?, ?, ?, ?, ?, ?)",
-		user.Nickname, user.Age, user.Gender, user.FirstName, user.LastName, user.Email, string(hashedPassword))
+	_, err = db.Exec(`
+        INSERT INTO users(email, password, first_name, last_name, date_of_birth, avatar, nickname, about_me, profile_type)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+		user.Email, string(hashed), user.FirstName, user.LastName, user.DateOfBirth,
+		user.Avatar, user.Nickname, user.AboutMe, user.ProfileType)
 	if err != nil {
-		http.Error(w, "Error registering user", http.StatusInternalServerError)
+		log.Printf("[Register] DB insert error: %v", err)
+		http.Error(w, "Failed to register user", http.StatusInternalServerError)
 		return
 	}
 
+	log.Printf("[Register] User %s registered successfully", user.Email)
 	w.WriteHeader(http.StatusCreated)
 	fmt.Fprintln(w, "User registered successfully")
 }
 
 func loginHandler(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodPost {
-		http.Error(w, "Invalid request method", http.StatusMethodNotAllowed)
+		http.Error(w, "Invalid method", http.StatusMethodNotAllowed)
 		return
 	}
 
-	var user User
-	if err := json.NewDecoder(r.Body).Decode(&user); err != nil {
-		http.Error(w, "Invalid request payload", http.StatusBadRequest)
+	var req User
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		http.Error(w, "Invalid payload", http.StatusBadRequest)
 		return
 	}
 
 	var storedPassword string
-	err := db.QueryRow("SELECT id, password FROM users WHERE email = ? OR nickname = ?", user.Email, user.Nickname).Scan(&user.ID, &storedPassword)
+	var userID int
+	err := db.QueryRow(`SELECT id, password FROM users WHERE email=?`, req.Email).Scan(&userID, &storedPassword)
 	if err != nil {
+		log.Printf("[Login] User not found: %v", err)
 		http.Error(w, "Invalid credentials", http.StatusUnauthorized)
 		return
 	}
 
-	if err := bcrypt.CompareHashAndPassword([]byte(storedPassword), []byte(user.Password)); err != nil {
+	if err := bcrypt.CompareHashAndPassword([]byte(storedPassword), []byte(req.Password)); err != nil {
+		log.Printf("[Login] Invalid password for id=%d", userID)
 		http.Error(w, "Invalid credentials", http.StatusUnauthorized)
 		return
 	}
 
-	token, err := generateJWT(user.ID, user.Email)
-	if err != nil {
-		http.Error(w, "Error generating token", http.StatusInternalServerError)
-		return
-	}
-
+	token, _ := generateJWT(userID, req.Email)
+	log.Printf("[Login] User %d logged in", userID)
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(map[string]string{"token": token})
 }
 
-// base64Decode decodes a base64 URL-encoded string.
-func base64Decode(data string) ([]byte, error) {
-	return base64.RawURLEncoding.DecodeString(data)
-}
-
-// verifyHMACSHA256 verifies the HMAC-SHA256 signature.
-func verifyHMACSHA256(message, secret, signature []byte) bool {
-	expectedSignature := signHMACSHA256(message, secret)
-	return hmac.Equal(expectedSignature, signature)
-}
-
-// ExtractUserIDFromToken extracts the user ID from a manually created JWT.
-func ExtractUserIDFromToken(tokenString string) (int, error) {
-	parts := strings.Split(tokenString, ".")
-	if len(parts) != 3 {
-		return 0, errors.New("invalid token format")
-	}
-
-	headerPayload := parts[0] + "." + parts[1]
-
-	// Decode and verify the signature
-	signature, err := base64Decode(parts[2])
-	if err != nil {
-		return 0, errors.New("invalid token signature encoding")
-	}
-
-	if !verifyHMACSHA256([]byte(headerPayload), jwtSecret, signature) {
-		return 0, errors.New("invalid token signature")
-	}
-
-	// Decode the payload
-	payloadJSON, err := base64Decode(parts[1])
-	if err != nil {
-		return 0, errors.New("invalid token payload encoding")
-	}
-
-	// Parse JSON and extract user ID
-	var claims map[string]interface{}
-	if err := json.Unmarshal(payloadJSON, &claims); err != nil {
-		return 0, errors.New("invalid token payload")
-	}
-
-	// Extract user ID
-	if userID, ok := claims["user_id"].(float64); ok {
-		return int(userID), nil
-	}
-
-	return 0, errors.New("user_id not found in token")
-}
-
 func getAllUsersHandler(w http.ResponseWriter, r *http.Request) {
-	rows, err := db.Query("SELECT id, nickname, email FROM users")
+	rows, err := db.Query("SELECT id, email, first_name, last_name, nickname, avatar, about_me, profile_type, date_of_birth FROM users")
 	if err != nil {
 		http.Error(w, "Failed to fetch users", http.StatusInternalServerError)
 		return
 	}
 	defer rows.Close()
 
-	var users []map[string]interface{}
+	var users []User
 	for rows.Next() {
-		var id int
-		var nickname, email string
-		if err := rows.Scan(&id, &nickname, &email); err != nil {
+		var u User
+		if err := rows.Scan(&u.ID, &u.Email, &u.FirstName, &u.LastName, &u.Nickname, &u.Avatar, &u.AboutMe, &u.ProfileType, &u.DateOfBirth); err != nil {
 			http.Error(w, "Error scanning user", http.StatusInternalServerError)
 			return
 		}
-		users = append(users, map[string]interface{}{
-			"id":       id,
-			"nickname": nickname,
-			"email":    email,
-		})
+		users = append(users, u)
 	}
 
 	w.Header().Set("Content-Type", "application/json")
@@ -231,57 +203,84 @@ func getAllUsersHandler(w http.ResponseWriter, r *http.Request) {
 }
 
 func uploadAvatarHandler(w http.ResponseWriter, r *http.Request) {
+	log.Println("[Avatar] Upload request received")
+
 	token := r.Header.Get("Authorization")
 	if token == "" {
+		log.Println("[Avatar][ERROR] Missing token")
 		http.Error(w, "Missing token", http.StatusUnauthorized)
 		return
 	}
+	log.Printf("[Avatar] Token received: %s\n", token)
+
 	userID, err := ExtractUserIDFromToken(token)
 	if err != nil {
-		http.Error(w, "Invalid or missing token", http.StatusUnauthorized)
+		log.Printf("[Avatar][ERROR] Invalid token: %v\n", err)
+		http.Error(w, "Invalid token", http.StatusUnauthorized)
 		return
 	}
+	log.Printf("[Avatar] Extracted userID: %d\n", userID)
 
-	r.ParseMultipartForm(100 << 20) // Limit upload size to ~10MB
+	// Parse up to 10MB file
+	if err := r.ParseMultipartForm(10 << 20); err != nil {
+		log.Printf("[Avatar][ERROR] Failed to parse multipart form: %v\n", err)
+		http.Error(w, "Failed to parse form", http.StatusBadRequest)
+		return
+	}
+	log.Println("[Avatar] Multipart form parsed")
+
 	file, handler, err := r.FormFile("avatar")
 	if err != nil {
+		log.Printf("[Avatar][ERROR] Failed to get form file: %v\n", err)
 		http.Error(w, "Failed to upload file", http.StatusBadRequest)
 		return
 	}
 	defer file.Close()
+	log.Printf("[Avatar] File received: %s (%d bytes)\n", handler.Filename, handler.Size)
 
-	// Create directory if not exists
+	// Ensure avatar directory exists
 	if _, err := os.Stat(avatarDir); os.IsNotExist(err) {
+		log.Printf("[Avatar] Directory %s does not exist, creating...\n", avatarDir)
 		if err := os.MkdirAll(avatarDir, os.ModePerm); err != nil {
+			log.Printf("[Avatar][ERROR] Failed to create directory: %v\n", err)
 			http.Error(w, "Failed to create directory", http.StatusInternalServerError)
 			return
 		}
 	}
+	log.Printf("[Avatar] Directory ready: %s\n", avatarDir)
 
-	// Create file path
-	filePath := filepath.Join(avatarDir, fmt.Sprintf("%d_%s", userID, handler.Filename))
+	// Generate a unique suffix using timestamp
+	timestamp := time.Now().UnixNano()
+	fileName := fmt.Sprintf("%d_%d_%s", userID, timestamp, handler.Filename)
+	filePath := filepath.Join(avatarDir, fileName)
+	log.Printf("[Avatar] Saving file as: %s\n", filePath)
 
-	// Create a new file on disk
+	// Save file
 	dst, err := os.Create(filePath)
 	if err != nil {
+		log.Printf("[Avatar][ERROR] Failed to create destination file: %v\n", err)
 		http.Error(w, "Failed to save file", http.StatusInternalServerError)
 		return
 	}
 	defer dst.Close()
 
-	// Copy file content
 	if _, err := io.Copy(dst, file); err != nil {
-		http.Error(w, "Failed to save file", http.StatusInternalServerError)
+		log.Printf("[Avatar][ERROR] Failed to copy file contents: %v\n", err)
+		http.Error(w, "Failed to write file", http.StatusInternalServerError)
 		return
 	}
+	log.Printf("[Avatar] File saved successfully: %s\n", filePath)
 
-	// Update the user's avatar in the database
-	_, err = db.Exec("UPDATE users SET avatar = ? WHERE id = ?", filePath, userID)
+	// Update database
+	_, err = db.Exec(`UPDATE users SET avatar=? WHERE id=?`, filePath, userID)
 	if err != nil {
-		http.Error(w, "Failed to update user avatar", http.StatusInternalServerError)
+		log.Printf("[Avatar][ERROR] Failed to update DB: %v\n", err)
+		http.Error(w, "Failed to update avatar", http.StatusInternalServerError)
 		return
 	}
+	log.Printf("[Avatar] DB updated for user %d with avatar %s\n", userID, filePath)
 
 	w.WriteHeader(http.StatusOK)
 	fmt.Fprintln(w, "Avatar uploaded successfully")
+	log.Println("[Avatar] Upload completed successfully")
 }
