@@ -43,6 +43,12 @@ func main() {
 	http.HandleFunc("/user/follow-status", disableCORS(jwtMiddleware(getUserFollowStatusHandler)))
 
 	http.HandleFunc("/groups/create", jwtMiddleware(createGroupHandler))
+	http.HandleFunc("/groups/browse", jwtMiddleware(browseGroupsHandler))
+	http.HandleFunc("/groups/my", jwtMiddleware(getUserGroupsHandler))
+
+	http.HandleFunc("/groups/invite", jwtMiddleware(inviteToGroupHandler))
+	http.HandleFunc("/groups/request", jwtMiddleware(requestJoinGroupHandler))
+	http.HandleFunc("/groups/respond", jwtMiddleware(respondToGroupRequestHandler))
 
 	http.HandleFunc("/users", disableCORS(getAllUsersHandler))
 
