@@ -14,8 +14,8 @@ import (
 
 	// "os"
 	// "path/filepath"
-	// "strconv"
-	// "strings"
+	"strconv"
+	"strings"
 	"time"
 )
 
@@ -500,4 +500,629 @@ func requestJoinGroupHandler(w http.ResponseWriter, r *http.Request) {
 	log.Printf("[Groups] User %d requested to join group %d", userID, req.GroupID)
 	w.WriteHeader(http.StatusOK)
 	json.NewEncoder(w).Encode(map[string]string{"message": "Join request sent successfully"})
+}
+
+// Get pending invitations and join requests for the current user
+func getPendingRequestsHandler(w http.ResponseWriter, r *http.Request) {
+	userEmail := r.Header.Get("User-Email")
+	if userEmail == "" {
+		http.Error(w, "Unauthorized", http.StatusUnauthorized)
+		return
+	}
+
+	var userID int
+	if err := db.QueryRow("SELECT id FROM users WHERE email = ?", userEmail).Scan(&userID); err != nil {
+		log.Printf("[Groups] User lookup failed: %v", err)
+		http.Error(w, "User not found", http.StatusUnauthorized)
+		return
+	}
+
+	requestType := r.URL.Query().Get("type") // "invitations" or "requests"
+
+	var query string
+	var args []interface{}
+
+	if requestType == "invitations" {
+		// Get invitations for the current user
+		query = `
+			SELECT gm.user_id, gm.group_id, gm.role, gm.status, g.title, g.description, u.nickname
+			FROM group_memberships gm
+			JOIN groups g ON gm.group_id = g.group_id
+			JOIN users u ON g.creator_id = u.id
+			WHERE gm.user_id = ? AND gm.status = 'invited'
+			ORDER BY gm.joined_at DESC
+		`
+		args = []interface{}{userID}
+	} else if requestType == "requests" {
+		// Get join requests for groups created by the current user
+		query = `
+			SELECT gm.user_id, gm.group_id, gm.role, gm.status, g.title, g.description, u.nickname
+			FROM group_memberships gm
+			JOIN groups g ON gm.group_id = g.group_id
+			JOIN users u ON gm.user_id = u.id
+			WHERE g.creator_id = ? AND gm.status = 'pending'
+			ORDER BY gm.joined_at DESC
+		`
+		args = []interface{}{userID}
+	} else {
+		http.Error(w, "Invalid request type. Use 'invitations' or 'requests'", http.StatusBadRequest)
+		return
+	}
+
+	rows, err := db.Query(query, args...)
+	if err != nil {
+		log.Printf("[Groups] Query pending requests failed: %v", err)
+		http.Error(w, "Error retrieving pending requests", http.StatusInternalServerError)
+		return
+	}
+	defer rows.Close()
+
+	var requests []map[string]interface{}
+	for rows.Next() {
+		var userIDVal, groupID int
+		var role, status, title, description, userName string
+		if err := rows.Scan(&userIDVal, &groupID, &role, &status, &title, &description, &userName); err != nil {
+			log.Printf("[Groups] Scan pending request failed: %v", err)
+			continue
+		}
+
+		request := map[string]interface{}{
+			"user_id":           userIDVal,
+			"group_id":          groupID,
+			"role":              role,
+			"status":            status,
+			"group_title":       title,
+			"group_description": description,
+			"user_name":         userName,
+		}
+		requests = append(requests, request)
+	}
+
+	log.Printf("[Groups] Returning %d pending %s for user %d", len(requests), requestType, userID)
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(requests)
+}
+
+// Get single group by ID
+func getGroupByIDHandler(w http.ResponseWriter, r *http.Request) {
+	userEmail := r.Header.Get("User-Email")
+	if userEmail == "" {
+		http.Error(w, "Unauthorized", http.StatusUnauthorized)
+		return
+	}
+
+	var userID int
+	if err := db.QueryRow("SELECT id FROM users WHERE email = ?", userEmail).Scan(&userID); err != nil {
+		log.Printf("[Groups] User lookup failed: %v", err)
+		http.Error(w, "User not found", http.StatusUnauthorized)
+		return
+	}
+
+	groupIDStr := strings.TrimPrefix(r.URL.Path, "/group/")
+	groupID, err := strconv.Atoi(groupIDStr)
+	if err != nil {
+		http.Error(w, "Invalid group ID", http.StatusBadRequest)
+		return
+	}
+
+	var group Group
+	err = db.QueryRow(`
+		SELECT g.group_id, g.title, g.description, g.creator_id, g.created_at, u.nickname,
+		       COUNT(gm.user_id) as member_count,
+		       COALESCE(um.role, '') as user_role
+		FROM groups g
+		JOIN users u ON g.creator_id = u.id
+		LEFT JOIN group_memberships gm ON g.group_id = gm.group_id AND gm.status = 'accepted'
+		LEFT JOIN group_memberships um ON g.group_id = um.group_id AND um.user_id = ? AND um.status = 'accepted'
+		WHERE g.group_id = ?
+		GROUP BY g.group_id
+	`, userID, groupID).Scan(&group.GroupID, &group.Title, &group.Description, &group.CreatorID,
+		&group.CreatedAt, &group.CreatorName, &group.MemberCount, &group.UserRole)
+
+	if err == sql.ErrNoRows {
+		http.Error(w, "Group not found", http.StatusNotFound)
+		return
+	} else if err != nil {
+		log.Printf("[Groups] Query group by ID failed: %v", err)
+		http.Error(w, "Server error", http.StatusInternalServerError)
+		return
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(group)
+}
+
+// Get group members
+func getGroupMembersHandler(w http.ResponseWriter, r *http.Request) {
+	userEmail := r.Header.Get("User-Email")
+	if userEmail == "" {
+		http.Error(w, "Unauthorized", http.StatusUnauthorized)
+		return
+	}
+
+	var userID int
+	if err := db.QueryRow("SELECT id FROM users WHERE email = ?", userEmail).Scan(&userID); err != nil {
+		log.Printf("[Groups] User lookup failed: %v", err)
+		http.Error(w, "User not found", http.StatusUnauthorized)
+		return
+	}
+
+	groupIDStr := strings.TrimPrefix(r.URL.Path, "/group/")
+	groupIDStr = strings.TrimSuffix(groupIDStr, "/members")
+	groupID, err := strconv.Atoi(groupIDStr)
+	if err != nil {
+		http.Error(w, "Invalid group ID", http.StatusBadRequest)
+		return
+	}
+
+	// Check if user is member of the group
+	var userRole string
+	err = db.QueryRow("SELECT role FROM group_memberships WHERE group_id = ? AND user_id = ? AND status = 'accepted'",
+		groupID, userID).Scan(&userRole)
+	if err != nil {
+		http.Error(w, "You are not a member of this group", http.StatusForbidden)
+		return
+	}
+
+	rows, err := db.Query(`
+		SELECT gm.user_id, gm.group_id, gm.role, gm.status, gm.joined_at, u.nickname
+		FROM group_memberships gm
+		JOIN users u ON gm.user_id = u.id
+		WHERE gm.group_id = ? AND gm.status = 'accepted'
+		ORDER BY gm.role DESC, gm.joined_at ASC
+	`, groupID)
+	if err != nil {
+		log.Printf("[Groups] Query members failed: %v", err)
+		http.Error(w, "Error retrieving group members", http.StatusInternalServerError)
+		return
+	}
+	defer rows.Close()
+
+	var members []GroupMembership
+	for rows.Next() {
+		var member GroupMembership
+		var joinedAt sql.NullString
+		if err := rows.Scan(&member.UserID, &member.GroupID, &member.Role, &member.Status,
+			&joinedAt, &member.UserName); err != nil {
+			log.Printf("[Groups] Scan member failed: %v", err)
+			continue
+		}
+		if joinedAt.Valid {
+			member.JoinedAt = joinedAt.String
+		}
+		members = append(members, member)
+	}
+
+	log.Printf("[Groups] Returning %d members for group %d", len(members), groupID)
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(members)
+}
+
+// Get posts for a specific group
+func getGroupPostsHandler(w http.ResponseWriter, r *http.Request) {
+	userEmail := r.Header.Get("User-Email")
+	if userEmail == "" {
+		http.Error(w, "Unauthorized", http.StatusUnauthorized)
+		return
+	}
+
+	var userID int
+	if err := db.QueryRow("SELECT id FROM users WHERE email = ?", userEmail).Scan(&userID); err != nil {
+		log.Printf("[Groups] User lookup failed: %v", err)
+		http.Error(w, "User not found", http.StatusUnauthorized)
+		return
+	}
+
+	groupIDStr := strings.TrimPrefix(r.URL.Path, "/group/")
+	groupIDStr = strings.TrimSuffix(groupIDStr, "/posts")
+	groupID, err := strconv.Atoi(groupIDStr)
+	if err != nil {
+		http.Error(w, "Invalid group ID", http.StatusBadRequest)
+		return
+	}
+
+	// Check if user is member of the group
+	var role string
+	err = db.QueryRow("SELECT role FROM group_memberships WHERE group_id = ? AND user_id = ? AND status = 'accepted'",
+		groupID, userID).Scan(&role)
+	if err != nil {
+		http.Error(w, "You are not a member of this group", http.StatusForbidden)
+		return
+	}
+
+	rows, err := db.Query(`
+		SELECT p.post_id, p.user_id, p.group_id, p.content, p.media, p.created_at, u.nickname
+		FROM posts p
+		JOIN users u ON p.user_id = u.id
+		WHERE p.group_id = ?
+		ORDER BY p.created_at DESC
+	`, groupID)
+	if err != nil {
+		log.Printf("[Groups] Query group posts failed: %v", err)
+		http.Error(w, "Error retrieving group posts", http.StatusInternalServerError)
+		return
+	}
+	defer rows.Close()
+
+	var posts []GroupPost
+	for rows.Next() {
+		var post GroupPost
+		if err := rows.Scan(&post.ID, &post.UserID, &post.GroupID, &post.Content,
+			&post.Media, &post.CreatedAt, &post.Nickname); err != nil {
+			log.Printf("[Groups] Scan group post failed: %v", err)
+			continue
+		}
+		posts = append(posts, post)
+	}
+
+	log.Printf("[Groups] Returning %d posts for group %d", len(posts), groupID)
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(posts)
+}
+
+// Leave group
+func leaveGroupHandler(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		http.Error(w, "Invalid request method", http.StatusMethodNotAllowed)
+		return
+	}
+
+	userEmail := r.Header.Get("User-Email")
+	if userEmail == "" {
+		http.Error(w, "Unauthorized", http.StatusUnauthorized)
+		return
+	}
+
+	var userID int
+	if err := db.QueryRow("SELECT id FROM users WHERE email = ?", userEmail).Scan(&userID); err != nil {
+		log.Printf("[Groups] User lookup failed: %v", err)
+		http.Error(w, "User not found", http.StatusUnauthorized)
+		return
+	}
+
+	var req struct {
+		GroupID int `json:"group_id"`
+	}
+
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		http.Error(w, "Invalid JSON", http.StatusBadRequest)
+		return
+	}
+
+	// Check if user is a member and get their role
+	var role string
+	err := db.QueryRow("SELECT role FROM group_memberships WHERE group_id = ? AND user_id = ? AND status = 'accepted'",
+		req.GroupID, userID).Scan(&role)
+	if err != nil {
+		http.Error(w, "You are not a member of this group", http.StatusBadRequest)
+		return
+	}
+
+	// Creators cannot leave their own group
+	if role == "creator" {
+		http.Error(w, "Group creators cannot leave their own group", http.StatusBadRequest)
+		return
+	}
+
+	// Remove user from group
+	_, err = db.Exec("DELETE FROM group_memberships WHERE group_id = ? AND user_id = ?", req.GroupID, userID)
+	if err != nil {
+		log.Printf("[Groups] Leave group failed: %v", err)
+		http.Error(w, "Error leaving group", http.StatusInternalServerError)
+		return
+	}
+
+	log.Printf("[Groups] User %d left group %d", userID, req.GroupID)
+	w.WriteHeader(http.StatusOK)
+	json.NewEncoder(w).Encode(map[string]string{"message": "Successfully left group"})
+}
+
+// Remove member from group (creators and admins only)
+func removeMemberHandler(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		http.Error(w, "Invalid request method", http.StatusMethodNotAllowed)
+		return
+	}
+
+	userEmail := r.Header.Get("User-Email")
+	if userEmail == "" {
+		http.Error(w, "Unauthorized", http.StatusUnauthorized)
+		return
+	}
+
+	var userID int
+	if err := db.QueryRow("SELECT id FROM users WHERE email = ?", userEmail).Scan(&userID); err != nil {
+		log.Printf("[Groups] User lookup failed: %v", err)
+		http.Error(w, "User not found", http.StatusUnauthorized)
+		return
+	}
+
+	var req struct {
+		GroupID        int `json:"group_id"`
+		MemberToRemove int `json:"member_to_remove"`
+	}
+
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		http.Error(w, "Invalid JSON", http.StatusBadRequest)
+		return
+	}
+
+	// Check if current user has permission to remove members
+	var currentUserRole string
+	err := db.QueryRow("SELECT role FROM group_memberships WHERE group_id = ? AND user_id = ? AND status = 'accepted'",
+		req.GroupID, userID).Scan(&currentUserRole)
+	if err != nil {
+		http.Error(w, "You are not a member of this group", http.StatusForbidden)
+		return
+	}
+
+	if currentUserRole != "creator" && currentUserRole != "admin" {
+		http.Error(w, "Only creators and admins can remove members", http.StatusForbidden)
+		return
+	}
+
+	// Check the role of the member to be removed
+	var memberRole string
+	err = db.QueryRow("SELECT role FROM group_memberships WHERE group_id = ? AND user_id = ? AND status = 'accepted'",
+		req.GroupID, req.MemberToRemove).Scan(&memberRole)
+	if err != nil {
+		http.Error(w, "Member not found in this group", http.StatusBadRequest)
+		return
+	}
+
+	// Creators cannot be removed
+	if memberRole == "creator" {
+		http.Error(w, "Cannot remove group creator", http.StatusBadRequest)
+		return
+	}
+
+	// Admins can only be removed by creators
+	if memberRole == "admin" && currentUserRole != "creator" {
+		http.Error(w, "Only creators can remove admins", http.StatusForbidden)
+		return
+	}
+
+	// Remove member from group
+	_, err = db.Exec("DELETE FROM group_memberships WHERE group_id = ? AND user_id = ?", req.GroupID, req.MemberToRemove)
+	if err != nil {
+		log.Printf("[Groups] Remove member failed: %v", err)
+		http.Error(w, "Error removing member", http.StatusInternalServerError)
+		return
+	}
+
+	log.Printf("[Groups] User %d removed user %d from group %d", userID, req.MemberToRemove, req.GroupID)
+	w.WriteHeader(http.StatusOK)
+	json.NewEncoder(w).Encode(map[string]string{"message": "Member removed successfully"})
+}
+
+// Promote member to admin (creators only)
+func promoteMemberHandler(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		http.Error(w, "Invalid request method", http.StatusMethodNotAllowed)
+		return
+	}
+
+	userEmail := r.Header.Get("User-Email")
+	if userEmail == "" {
+		http.Error(w, "Unauthorized", http.StatusUnauthorized)
+		return
+	}
+
+	var userID int
+	if err := db.QueryRow("SELECT id FROM users WHERE email = ?", userEmail).Scan(&userID); err != nil {
+		log.Printf("[Groups] User lookup failed: %v", err)
+		http.Error(w, "User not found", http.StatusUnauthorized)
+		return
+	}
+
+	var req struct {
+		GroupID         int    `json:"group_id"`
+		MemberToPromote int    `json:"member_to_promote"`
+		NewRole         string `json:"new_role"` // admin or member
+	}
+
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		http.Error(w, "Invalid JSON", http.StatusBadRequest)
+		return
+	}
+
+	if req.NewRole != "admin" && req.NewRole != "member" {
+		http.Error(w, "New role must be 'admin' or 'member'", http.StatusBadRequest)
+		return
+	}
+
+	// Check if current user is the creator
+	var currentUserRole string
+	err := db.QueryRow("SELECT role FROM group_memberships WHERE group_id = ? AND user_id = ? AND status = 'accepted'",
+		req.GroupID, userID).Scan(&currentUserRole)
+	if err != nil || currentUserRole != "creator" {
+		http.Error(w, "Only group creators can change member roles", http.StatusForbidden)
+		return
+	}
+
+	// Check if target member exists in group
+	var memberRole string
+	err = db.QueryRow("SELECT role FROM group_memberships WHERE group_id = ? AND user_id = ? AND status = 'accepted'",
+		req.GroupID, req.MemberToPromote).Scan(&memberRole)
+	if err != nil {
+		http.Error(w, "Member not found in this group", http.StatusBadRequest)
+		return
+	}
+
+	if memberRole == "creator" {
+		http.Error(w, "Cannot change creator role", http.StatusBadRequest)
+		return
+	}
+
+	// Update member role
+	_, err = db.Exec("UPDATE group_memberships SET role = ? WHERE group_id = ? AND user_id = ?",
+		req.NewRole, req.GroupID, req.MemberToPromote)
+	if err != nil {
+		log.Printf("[Groups] Promote member failed: %v", err)
+		http.Error(w, "Error updating member role", http.StatusInternalServerError)
+		return
+	}
+
+	log.Printf("[Groups] User %d changed role of user %d to %s in group %d", userID, req.MemberToPromote, req.NewRole, req.GroupID)
+	w.WriteHeader(http.StatusOK)
+	json.NewEncoder(w).Encode(map[string]string{"message": "Member role updated successfully"})
+}
+
+// Update group info (creators and admins only)
+func updateGroupHandler(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPut {
+		http.Error(w, "Invalid request method", http.StatusMethodNotAllowed)
+		return
+	}
+
+	userEmail := r.Header.Get("User-Email")
+	if userEmail == "" {
+		http.Error(w, "Unauthorized", http.StatusUnauthorized)
+		return
+	}
+
+	var userID int
+	if err := db.QueryRow("SELECT id FROM users WHERE email = ?", userEmail).Scan(&userID); err != nil {
+		log.Printf("[Groups] User lookup failed: %v", err)
+		http.Error(w, "User not found", http.StatusUnauthorized)
+		return
+	}
+
+	var req struct {
+		GroupID     int    `json:"group_id"`
+		Title       string `json:"title"`
+		Description string `json:"description"`
+	}
+
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		http.Error(w, "Invalid JSON", http.StatusBadRequest)
+		return
+	}
+
+	if req.Title == "" {
+		http.Error(w, "Title is required", http.StatusBadRequest)
+		return
+	}
+
+	// Check if user has permission to update group
+	var role string
+	err := db.QueryRow("SELECT role FROM group_memberships WHERE group_id = ? AND user_id = ? AND status = 'accepted'",
+		req.GroupID, userID).Scan(&role)
+	if err != nil {
+		http.Error(w, "You are not a member of this group", http.StatusForbidden)
+		return
+	}
+
+	if role != "creator" && role != "admin" {
+		http.Error(w, "Only creators and admins can update group info", http.StatusForbidden)
+		return
+	}
+
+	// Update group
+	_, err = db.Exec("UPDATE groups SET title = ?, description = ? WHERE group_id = ?",
+		req.Title, req.Description, req.GroupID)
+	if err != nil {
+		log.Printf("[Groups] Update group failed: %v", err)
+		http.Error(w, "Error updating group", http.StatusInternalServerError)
+		return
+	}
+
+	log.Printf("[Groups] User %d updated group %d", userID, req.GroupID)
+	w.WriteHeader(http.StatusOK)
+	json.NewEncoder(w).Encode(map[string]string{"message": "Group updated successfully"})
+}
+
+// Get events for a group
+func getGroupEventsHandler(w http.ResponseWriter, r *http.Request) {
+	userEmail := r.Header.Get("User-Email")
+	if userEmail == "" {
+		http.Error(w, "Unauthorized", http.StatusUnauthorized)
+		return
+	}
+
+	var userID int
+	if err := db.QueryRow("SELECT id FROM users WHERE email = ?", userEmail).Scan(&userID); err != nil {
+		log.Printf("[Groups] User lookup failed: %v", err)
+		http.Error(w, "User not found", http.StatusUnauthorized)
+		return
+	}
+
+	groupIDStr := strings.TrimPrefix(r.URL.Path, "/group/")
+	groupIDStr = strings.TrimSuffix(groupIDStr, "/events")
+	groupID, err := strconv.Atoi(groupIDStr)
+	if err != nil {
+		http.Error(w, "Invalid group ID", http.StatusBadRequest)
+		return
+	}
+
+	// Check if user is member of the group
+	var role string
+	err = db.QueryRow("SELECT role FROM group_memberships WHERE group_id = ? AND user_id = ? AND status = 'accepted'",
+		groupID, userID).Scan(&role)
+	if err != nil {
+		http.Error(w, "You are not a member of this group", http.StatusForbidden)
+		return
+	}
+
+	rows, err := db.Query(`
+		SELECT e.event_id, e.group_id, e.creator_id, e.title, e.description, e.event_time, e.created_at, u.nickname,
+		       COALESCE(er.response, '') as user_response
+		FROM events e
+		JOIN users u ON e.creator_id = u.id
+		LEFT JOIN event_responses er ON e.event_id = er.event_id AND er.user_id = ?
+		WHERE e.group_id = ?
+		ORDER BY e.event_time ASC
+	`, userID, groupID)
+	if err != nil {
+		log.Printf("[Groups] Query events failed: %v", err)
+		http.Error(w, "Error retrieving events", http.StatusInternalServerError)
+		return
+	}
+	defer rows.Close()
+
+	var events []Event
+	for rows.Next() {
+		var event Event
+		if err := rows.Scan(&event.EventID, &event.GroupID, &event.CreatorID, &event.Title,
+			&event.Description, &event.EventTime, &event.CreatedAt, &event.CreatorName, &event.UserResponse); err != nil {
+			log.Printf("[Groups] Scan event failed: %v", err)
+			continue
+		}
+		events = append(events, event)
+	}
+
+	log.Printf("[Groups] Returning %d events for group %d", len(events), groupID)
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(events)
+}
+
+// Helper function to handle dynamic group routes
+func handleGroupDynamicRoutes(w http.ResponseWriter, r *http.Request) {
+	path := r.URL.Path
+
+	// Handle /group/{id}/members
+	if strings.HasSuffix(path, "/members") && strings.HasPrefix(path, "/group/") {
+		jwtMiddleware(getGroupMembersHandler)(w, r)
+		return
+	}
+
+	// Handle /group/{id}/posts
+	if strings.HasSuffix(path, "/posts") && strings.HasPrefix(path, "/group/") {
+		jwtMiddleware(getGroupPostsHandler)(w, r)
+		return
+	}
+
+	// Handle /group/{id}/events
+	if strings.HasSuffix(path, "/events") && strings.HasPrefix(path, "/group/") {
+		jwtMiddleware(getGroupEventsHandler)(w, r)
+		return
+	}
+
+	// Handle single group by ID /group/{id}
+	if !strings.Contains(strings.TrimPrefix(path, "/group/"), "/") {
+		jwtMiddleware(getGroupByIDHandler)(w, r)
+		return
+	}
+
+	http.Error(w, "Group route not found", http.StatusNotFound)
 }

@@ -45,10 +45,19 @@ func main() {
 	http.HandleFunc("/groups/create", jwtMiddleware(createGroupHandler))
 	http.HandleFunc("/groups/browse", jwtMiddleware(browseGroupsHandler))
 	http.HandleFunc("/groups/my", jwtMiddleware(getUserGroupsHandler))
+	http.HandleFunc("/groups/update", jwtMiddleware(updateGroupHandler))
 
 	http.HandleFunc("/groups/invite", jwtMiddleware(inviteToGroupHandler))
 	http.HandleFunc("/groups/request", jwtMiddleware(requestJoinGroupHandler))
 	http.HandleFunc("/groups/respond", jwtMiddleware(respondToGroupRequestHandler))
+	http.HandleFunc("/groups/pending", jwtMiddleware(getPendingRequestsHandler))
+	http.HandleFunc("/groups/leave", jwtMiddleware(leaveGroupHandler))
+	http.HandleFunc("/groups/remove", jwtMiddleware(removeMemberHandler))
+	http.HandleFunc("/groups/promote", jwtMiddleware(promoteMemberHandler))
+
+	// Dynamic routes handler
+	http.HandleFunc("/group/", handleGroupDynamicRoutes)
+	// http.HandleFunc("/event/", handleEventDynamicRoutes)
 
 	http.HandleFunc("/users", disableCORS(getAllUsersHandler))
 
