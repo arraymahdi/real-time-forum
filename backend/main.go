@@ -55,9 +55,12 @@ func main() {
 	http.HandleFunc("/groups/remove", jwtMiddleware(removeMemberHandler))
 	http.HandleFunc("/groups/promote", jwtMiddleware(promoteMemberHandler))
 
+	http.HandleFunc("/events/create", jwtMiddleware(createEventHandler))
+	http.HandleFunc("/events/respond", jwtMiddleware(respondToEventHandler))
+
 	// Dynamic routes handler
 	http.HandleFunc("/group/", handleGroupDynamicRoutes)
-	// http.HandleFunc("/event/", handleEventDynamicRoutes)
+	http.HandleFunc("/event/", handleEventDynamicRoutes)
 
 	http.HandleFunc("/users", disableCORS(getAllUsersHandler))
 

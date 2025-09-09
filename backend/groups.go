@@ -65,25 +65,25 @@ type GroupMembership struct {
 	UserName string `json:"user_name,omitempty"`
 }
 
-type Event struct {
-	EventID      int    `json:"event_id"`
-	GroupID      int    `json:"group_id"`
-	CreatorID    int    `json:"creator_id"`
-	Title        string `json:"title"`
-	Description  string `json:"description,omitempty"`
-	EventTime    string `json:"event_time"`
-	CreatedAt    string `json:"created_at"`
-	CreatorName  string `json:"creator_name,omitempty"`
-	UserResponse string `json:"user_response,omitempty"` // going, not_going, or null
-}
+// type Event struct {
+// 	EventID      int    `json:"event_id"`
+// 	GroupID      int    `json:"group_id"`
+// 	CreatorID    int    `json:"creator_id"`
+// 	Title        string `json:"title"`
+// 	Description  string `json:"description,omitempty"`
+// 	EventTime    string `json:"event_time"`
+// 	CreatedAt    string `json:"created_at"`
+// 	CreatorName  string `json:"creator_name,omitempty"`
+// 	UserResponse string `json:"user_response,omitempty"` // going, not_going, or null
+// }
 
-type EventResponse struct {
-	EventID     int    `json:"event_id"`
-	UserID      int    `json:"user_id"`
-	Response    string `json:"response"`
-	RespondedAt string `json:"responded_at"`
-	UserName    string `json:"user_name,omitempty"`
-}
+// type EventResponse struct {
+// 	EventID     int    `json:"event_id"`
+// 	UserID      int    `json:"user_id"`
+// 	Response    string `json:"response"`
+// 	RespondedAt string `json:"responded_at"`
+// 	UserName    string `json:"user_name,omitempty"`
+// }
 
 type GroupPost struct {
 	ID        int    `json:"post_id"`
@@ -1030,70 +1030,6 @@ func updateGroupHandler(w http.ResponseWriter, r *http.Request) {
 	log.Printf("[Groups] User %d updated group %d", userID, req.GroupID)
 	w.WriteHeader(http.StatusOK)
 	json.NewEncoder(w).Encode(map[string]string{"message": "Group updated successfully"})
-}
-
-// Get events for a group
-func getGroupEventsHandler(w http.ResponseWriter, r *http.Request) {
-	userEmail := r.Header.Get("User-Email")
-	if userEmail == "" {
-		http.Error(w, "Unauthorized", http.StatusUnauthorized)
-		return
-	}
-
-	var userID int
-	if err := db.QueryRow("SELECT id FROM users WHERE email = ?", userEmail).Scan(&userID); err != nil {
-		log.Printf("[Groups] User lookup failed: %v", err)
-		http.Error(w, "User not found", http.StatusUnauthorized)
-		return
-	}
-
-	groupIDStr := strings.TrimPrefix(r.URL.Path, "/group/")
-	groupIDStr = strings.TrimSuffix(groupIDStr, "/events")
-	groupID, err := strconv.Atoi(groupIDStr)
-	if err != nil {
-		http.Error(w, "Invalid group ID", http.StatusBadRequest)
-		return
-	}
-
-	// Check if user is member of the group
-	var role string
-	err = db.QueryRow("SELECT role FROM group_memberships WHERE group_id = ? AND user_id = ? AND status = 'accepted'",
-		groupID, userID).Scan(&role)
-	if err != nil {
-		http.Error(w, "You are not a member of this group", http.StatusForbidden)
-		return
-	}
-
-	rows, err := db.Query(`
-		SELECT e.event_id, e.group_id, e.creator_id, e.title, e.description, e.event_time, e.created_at, u.nickname,
-		       COALESCE(er.response, '') as user_response
-		FROM events e
-		JOIN users u ON e.creator_id = u.id
-		LEFT JOIN event_responses er ON e.event_id = er.event_id AND er.user_id = ?
-		WHERE e.group_id = ?
-		ORDER BY e.event_time ASC
-	`, userID, groupID)
-	if err != nil {
-		log.Printf("[Groups] Query events failed: %v", err)
-		http.Error(w, "Error retrieving events", http.StatusInternalServerError)
-		return
-	}
-	defer rows.Close()
-
-	var events []Event
-	for rows.Next() {
-		var event Event
-		if err := rows.Scan(&event.EventID, &event.GroupID, &event.CreatorID, &event.Title,
-			&event.Description, &event.EventTime, &event.CreatedAt, &event.CreatorName, &event.UserResponse); err != nil {
-			log.Printf("[Groups] Scan event failed: %v", err)
-			continue
-		}
-		events = append(events, event)
-	}
-
-	log.Printf("[Groups] Returning %d events for group %d", len(events), groupID)
-	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(events)
 }
 
 // Helper function to handle dynamic group routes
