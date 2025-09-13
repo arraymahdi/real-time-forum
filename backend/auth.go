@@ -12,6 +12,7 @@ import (
 	"net/http"
 	"os"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"time"
 
@@ -283,4 +284,220 @@ func uploadAvatarHandler(w http.ResponseWriter, r *http.Request) {
 	w.WriteHeader(http.StatusOK)
 	fmt.Fprintln(w, "Avatar uploaded successfully")
 	log.Println("[Avatar] Upload completed successfully")
+}
+
+// Add this new endpoint to get current user profile
+func getCurrentUserProfileHandler(w http.ResponseWriter, r *http.Request) {
+	userEmail := r.Header.Get("User-Email")
+	if userEmail == "" {
+		http.Error(w, "Unauthorized", http.StatusUnauthorized)
+		return
+	}
+
+	var user struct {
+		ID       int    `json:"id"`
+		Nickname string `json:"nickname"`
+		Avatar   string `json:"avatar"`
+		Email    string `json:"email"`
+	}
+
+	err := db.QueryRow("SELECT id, nickname, avatar, email FROM users WHERE email = ?", userEmail).
+		Scan(&user.ID, &user.Nickname, &user.Avatar, &user.Email)
+
+	if err != nil {
+		http.Error(w, "User not found", http.StatusNotFound)
+		return
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(user)
+}
+
+// Add this new endpoint to get user by ID
+func getUserByIDHandler(w http.ResponseWriter, r *http.Request) {
+	userEmail := r.Header.Get("User-Email")
+	if userEmail == "" {
+		http.Error(w, "Unauthorized", http.StatusUnauthorized)
+		return
+	}
+
+	// Extract user ID from URL path
+	userIDStr := r.URL.Path[len("/user/"):]
+	userID, err := strconv.Atoi(userIDStr)
+	if err != nil {
+		http.Error(w, "Invalid user ID", http.StatusBadRequest)
+		return
+	}
+
+	var user struct {
+		ID       int    `json:"id"`
+		Nickname string `json:"nickname"`
+		Avatar   string `json:"avatar"`
+	}
+
+	err = db.QueryRow("SELECT id, nickname, avatar FROM users WHERE id = ?", userID).
+		Scan(&user.ID, &user.Nickname, &user.Avatar)
+
+	if err != nil {
+		http.Error(w, "User not found", http.StatusNotFound)
+		return
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(user)
+}
+
+// getFullUserProfileHandler - Get full profile of the authenticated user
+func getFullUserProfileHandler(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodGet {
+		http.Error(w, "Invalid method", http.StatusMethodNotAllowed)
+		return
+	}
+
+	// Extract user ID from token
+	token := r.Header.Get("Authorization")
+	if token == "" {
+		log.Println("[Profile][ERROR] Missing token")
+		http.Error(w, "Missing token", http.StatusUnauthorized)
+		return
+	}
+
+	userID, err := ExtractUserIDFromToken(token)
+	if err != nil {
+		log.Printf("[Profile][ERROR] Invalid token: %v", err)
+		http.Error(w, "Invalid token", http.StatusUnauthorized)
+		return
+	}
+
+	var user User
+	err = db.QueryRow(`
+		SELECT id, email, first_name, last_name, date_of_birth, avatar, nickname, about_me, profile_type 
+		FROM users WHERE id = ?`, userID).
+		Scan(&user.ID, &user.Email, &user.FirstName, &user.LastName, &user.DateOfBirth,
+			&user.Avatar, &user.Nickname, &user.AboutMe, &user.ProfileType)
+
+	if err != nil {
+		log.Printf("[Profile][ERROR] User not found: %v", err)
+		http.Error(w, "User not found", http.StatusNotFound)
+		return
+	}
+
+	// Don't send password in response
+	user.Password = ""
+
+	log.Printf("[Profile] Retrieved full profile for user %d", userID)
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(user)
+}
+
+// updateUserProfileHandler - Update profile of the authenticated user
+func updateUserProfileHandler(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPut {
+		http.Error(w, "Invalid method", http.StatusMethodNotAllowed)
+		return
+	}
+
+	// Extract user ID from token
+	token := r.Header.Get("Authorization")
+	if token == "" {
+		log.Println("[Update][ERROR] Missing token")
+		http.Error(w, "Missing token", http.StatusUnauthorized)
+		return
+	}
+
+	userID, err := ExtractUserIDFromToken(token)
+	if err != nil {
+		log.Printf("[Update][ERROR] Invalid token: %v", err)
+		http.Error(w, "Invalid token", http.StatusUnauthorized)
+		return
+	}
+
+	var updateData struct {
+		FirstName   *string `json:"first_name,omitempty"`
+		LastName    *string `json:"last_name,omitempty"`
+		DateOfBirth *string `json:"date_of_birth,omitempty"`
+		Nickname    *string `json:"nickname,omitempty"`
+		AboutMe     *string `json:"about_me,omitempty"`
+		ProfileType *string `json:"profile_type,omitempty"`
+		Password    *string `json:"password,omitempty"`
+	}
+
+	if err := json.NewDecoder(r.Body).Decode(&updateData); err != nil {
+		log.Printf("[Update] JSON decode error: %v", err)
+		http.Error(w, "Invalid payload", http.StatusBadRequest)
+		return
+	}
+
+	// Build dynamic query based on provided fields
+	var setParts []string
+	var args []interface{}
+
+	if updateData.FirstName != nil {
+		setParts = append(setParts, "first_name = ?")
+		args = append(args, *updateData.FirstName)
+	}
+	if updateData.LastName != nil {
+		setParts = append(setParts, "last_name = ?")
+		args = append(args, *updateData.LastName)
+	}
+	if updateData.DateOfBirth != nil {
+		setParts = append(setParts, "date_of_birth = ?")
+		args = append(args, *updateData.DateOfBirth)
+	}
+	if updateData.Nickname != nil {
+		setParts = append(setParts, "nickname = ?")
+		args = append(args, *updateData.Nickname)
+	}
+	if updateData.AboutMe != nil {
+		setParts = append(setParts, "about_me = ?")
+		args = append(args, *updateData.AboutMe)
+	}
+	if updateData.ProfileType != nil {
+		setParts = append(setParts, "profile_type = ?")
+		args = append(args, *updateData.ProfileType)
+	}
+	if updateData.Password != nil {
+		// Hash the new password
+		hashed, err := bcrypt.GenerateFromPassword([]byte(*updateData.Password), bcrypt.DefaultCost)
+		if err != nil {
+			log.Printf("[Update] Password hash error: %v", err)
+			http.Error(w, "Internal error", http.StatusInternalServerError)
+			return
+		}
+		setParts = append(setParts, "password = ?")
+		args = append(args, string(hashed))
+	}
+
+	if len(setParts) == 0 {
+		http.Error(w, "No fields to update", http.StatusBadRequest)
+		return
+	}
+
+	// Add userID to args for WHERE clause
+	args = append(args, userID)
+
+	query := fmt.Sprintf("UPDATE users SET %s WHERE id = ?", strings.Join(setParts, ", "))
+
+	result, err := db.Exec(query, args...)
+	if err != nil {
+		log.Printf("[Update] DB update error: %v", err)
+		http.Error(w, "Failed to update profile", http.StatusInternalServerError)
+		return
+	}
+
+	rowsAffected, err := result.RowsAffected()
+	if err != nil {
+		log.Printf("[Update] Error checking rows affected: %v", err)
+		http.Error(w, "Update verification failed", http.StatusInternalServerError)
+		return
+	}
+
+	if rowsAffected == 0 {
+		http.Error(w, "User not found", http.StatusNotFound)
+		return
+	}
+
+	log.Printf("[Update] Profile updated successfully for user %d", userID)
+	w.WriteHeader(http.StatusOK)
+	fmt.Fprintln(w, "Profile updated successfully")
 }

@@ -20,63 +20,77 @@ func main() {
 	fs := http.FileServer(http.Dir("uploads"))
 	http.Handle("/uploads/", http.StripPrefix("/uploads/", fs))
 
-	// Set up routes with CORS disabled
-	http.HandleFunc("/register", disableCORS(registerHandler))
-	http.HandleFunc("/login", disableCORS(loginHandler))
-	http.HandleFunc("/upload-avatar", disableCORS(uploadAvatarHandler))
+	// Auth
+	http.HandleFunc("/register", withCORS(registerHandler))
+	http.HandleFunc("/login", withCORS(loginHandler))
+	http.HandleFunc("/upload-avatar", withCORS(uploadAvatarHandler))
 
-	http.HandleFunc("/posts", disableCORS(jwtMiddleware(createPostHandler)))
-	http.HandleFunc("/posts/all", disableCORS(jwtMiddleware(getPostsHandler)))
-	http.HandleFunc("/post/", disableCORS(jwtMiddleware(GetPostByIDHandler)))
-	http.HandleFunc("/comments", disableCORS(jwtMiddleware(createCommentHandler)))
-	http.HandleFunc("/comments/all", disableCORS(getCommentsByPostHandler))
+	// Posts & comments
+	http.HandleFunc("/posts", withCORS(jwtMiddleware(createPostHandler)))
+	http.HandleFunc("/posts/all", withCORS(jwtMiddleware(getPostsHandler)))
+	http.HandleFunc("/post/", withCORS(jwtMiddleware(GetPostByIDHandler)))
+	http.HandleFunc("/comments", withCORS(jwtMiddleware(createCommentHandler)))
+	http.HandleFunc("/comments/all", withCORS(getCommentsByPostHandler))
 
-	http.HandleFunc("/ws", disableCORS(handleConnections))
-	http.HandleFunc("/messages", disableCORS(getMessagesHandler))
-	http.HandleFunc("/online", disableCORS(getOnlineUsers))
-	http.HandleFunc("/getSortedUsers", disableCORS(getSortedUsersHandler))
+	// Chat & WebSocket
+	http.HandleFunc("/ws", withCORS(handleConnections))
+	http.HandleFunc("/private-messages", withCORS(jwtMiddleware(getPrivateMessagesHandler)))
+	http.HandleFunc("/group-messages", withCORS(jwtMiddleware(getGroupMessagesHandler)))
+	http.HandleFunc("/chat-list", withCORS(jwtMiddleware(getMessageableUsersAndGroupsHandler)))
 
-	http.HandleFunc("/follow", disableCORS(jwtMiddleware(followUserHandler)))
-	http.HandleFunc("/unfollow", disableCORS(jwtMiddleware(unfollowUserHandler)))
-	http.HandleFunc("/followers", disableCORS(jwtMiddleware(getFollowersHandler)))
-	http.HandleFunc("/following", disableCORS(jwtMiddleware(getFollowingHandler)))
-	http.HandleFunc("/user/follow-status", disableCORS(jwtMiddleware(getUserFollowStatusHandler)))
+	// Social
+	http.HandleFunc("/follow", withCORS(jwtMiddleware(followUserHandler)))
+	http.HandleFunc("/unfollow", withCORS(jwtMiddleware(unfollowUserHandler)))
+	http.HandleFunc("/followers", withCORS(jwtMiddleware(getFollowersHandler)))
+	http.HandleFunc("/following", withCORS(jwtMiddleware(getFollowingHandler)))
+	http.HandleFunc("/user/follow-status", withCORS(jwtMiddleware(getUserFollowStatusHandler)))
 
-	http.HandleFunc("/groups/create", jwtMiddleware(createGroupHandler))
-	http.HandleFunc("/groups/browse", jwtMiddleware(browseGroupsHandler))
-	http.HandleFunc("/groups/my", jwtMiddleware(getUserGroupsHandler))
-	http.HandleFunc("/groups/update", jwtMiddleware(updateGroupHandler))
+	// Groups
+	http.HandleFunc("/groups/create", withCORS(jwtMiddleware(createGroupHandler)))
+	http.HandleFunc("/groups/browse", withCORS(jwtMiddleware(browseGroupsHandler)))
+	http.HandleFunc("/groups/my", withCORS(jwtMiddleware(getUserGroupsHandler)))
+	http.HandleFunc("/groups/update", withCORS(jwtMiddleware(updateGroupHandler)))
+	http.HandleFunc("/groups/invite", withCORS(jwtMiddleware(inviteToGroupHandler)))
+	http.HandleFunc("/groups/request", withCORS(jwtMiddleware(requestJoinGroupHandler)))
+	http.HandleFunc("/groups/respond", withCORS(jwtMiddleware(respondToGroupRequestHandler)))
+	http.HandleFunc("/groups/pending", withCORS(jwtMiddleware(getPendingRequestsHandler)))
+	http.HandleFunc("/groups/leave", withCORS(jwtMiddleware(leaveGroupHandler)))
+	http.HandleFunc("/groups/remove", withCORS(jwtMiddleware(removeMemberHandler)))
+	http.HandleFunc("/groups/promote", withCORS(jwtMiddleware(promoteMemberHandler)))
 
-	http.HandleFunc("/groups/invite", jwtMiddleware(inviteToGroupHandler))
-	http.HandleFunc("/groups/request", jwtMiddleware(requestJoinGroupHandler))
-	http.HandleFunc("/groups/respond", jwtMiddleware(respondToGroupRequestHandler))
-	http.HandleFunc("/groups/pending", jwtMiddleware(getPendingRequestsHandler))
-	http.HandleFunc("/groups/leave", jwtMiddleware(leaveGroupHandler))
-	http.HandleFunc("/groups/remove", jwtMiddleware(removeMemberHandler))
-	http.HandleFunc("/groups/promote", jwtMiddleware(promoteMemberHandler))
+	// Events
+	http.HandleFunc("/events/create", withCORS(jwtMiddleware(createEventHandler)))
+	http.HandleFunc("/events/respond", withCORS(jwtMiddleware(respondToEventHandler)))
 
-	http.HandleFunc("/events/create", jwtMiddleware(createEventHandler))
-	http.HandleFunc("/events/respond", jwtMiddleware(respondToEventHandler))
+	// Dynamic routes
+	http.HandleFunc("/group/", withCORS(handleGroupDynamicRoutes))
+	http.HandleFunc("/event/", withCORS(handleEventDynamicRoutes))
 
-	// Dynamic routes handler
-	http.HandleFunc("/group/", handleGroupDynamicRoutes)
-	http.HandleFunc("/event/", handleEventDynamicRoutes)
-
-	http.HandleFunc("/users", disableCORS(getAllUsersHandler))
+	// Users
+	http.HandleFunc("/users", withCORS(getAllUsersHandler))
+	http.HandleFunc("/user/profile", withCORS(jwtMiddleware(getCurrentUserProfileHandler)))
+	http.HandleFunc("/user/", withCORS(jwtMiddleware(getUserByIDHandler)))
+	http.HandleFunc("/user/profile/details", withCORS(jwtMiddleware(getFullUserProfileHandler)))
+	http.HandleFunc("/user/profile/update", withCORS(jwtMiddleware(updateUserProfileHandler)))
 
 	fmt.Println("Server running on port 8088")
 	log.Fatal(http.ListenAndServe(":8088", nil))
 }
 
-func disableCORS(next http.HandlerFunc) http.HandlerFunc {
+// Global CORS wrapper
+func withCORS(next http.HandlerFunc) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
+		// You can restrict origin if you want, e.g. "http://localhost:3000"
 		w.Header().Set("Access-Control-Allow-Origin", "*")
 		w.Header().Set("Access-Control-Allow-Methods", "GET, POST, PUT, DELETE, OPTIONS")
 		w.Header().Set("Access-Control-Allow-Headers", "Content-Type, Authorization")
-		if r.Method == "OPTIONS" {
+
+		// Handle preflight
+		if r.Method == http.MethodOptions {
 			w.WriteHeader(http.StatusOK)
 			return
 		}
+
 		next(w, r)
 	}
 }
