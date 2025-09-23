@@ -54,7 +54,7 @@ func createEventHandler(w http.ResponseWriter, r *http.Request) {
 
 	var userID int
 	if err := db.QueryRow("SELECT id FROM users WHERE email = ?", userEmail).Scan(&userID); err != nil {
-		log.Printf("[Groups] User lookup failed: %v", err)
+		log.Printf("[Events] User lookup failed: %v", err)
 		http.Error(w, "User not found", http.StatusUnauthorized)
 		return
 	}
@@ -100,16 +100,22 @@ func createEventHandler(w http.ResponseWriter, r *http.Request) {
 	res, err := db.Exec(`INSERT INTO events (group_id, creator_id, title, description, event_time) VALUES (?, ?, ?, ?, ?)`,
 		req.GroupID, userID, req.Title, req.Description, eventTime.Format("2006-01-02 15:04:05"))
 	if err != nil {
-		log.Printf("[Groups] Event insert failed: %v", err)
+		log.Printf("[Events] Event insert failed: %v", err)
 		http.Error(w, "Error creating event", http.StatusInternalServerError)
 		return
 	}
 
 	eventID, err := res.LastInsertId()
 	if err != nil {
-		log.Printf("[Groups] Getting event ID failed: %v", err)
+		log.Printf("[Events] Getting event ID failed: %v", err)
 		http.Error(w, "Error creating event", http.StatusInternalServerError)
 		return
+	}
+
+	// Create notifications for all group members except the creator
+	if err := createGroupEventNotification(req.GroupID, req.Title, userID); err != nil {
+		log.Printf("[Events] Failed to create event notifications: %v", err)
+		// Don't fail the event creation if notifications fail
 	}
 
 	event := Event{
@@ -121,9 +127,224 @@ func createEventHandler(w http.ResponseWriter, r *http.Request) {
 		EventTime:   eventTime.Format("2006-01-02 15:04:05"),
 	}
 
-	log.Printf("[Groups] User %d created event %d in group %d", userID, eventID, req.GroupID)
+	log.Printf("[Events] User %d created event %d in group %d", userID, eventID, req.GroupID)
 	w.WriteHeader(http.StatusCreated)
 	json.NewEncoder(w).Encode(event)
+}
+
+// Enhanced createGroupEventNotification function with better messaging
+func createGroupEventNotification(groupID int, eventTitle string, excludeUserID int) error {
+	// Get group name for better notification message
+	var groupName string
+	err := db.QueryRow("SELECT title FROM groups WHERE group_id = ?", groupID).Scan(&groupName)
+	if err != nil {
+		log.Printf("Error getting group name for event notification: %v", err)
+		groupName = "your group" // fallback
+	}
+
+	// Get creator name for better notification message
+	var creatorName string
+	err = db.QueryRow("SELECT nickname FROM users WHERE id = ?", excludeUserID).Scan(&creatorName)
+	if err != nil {
+		log.Printf("Error getting creator name for event notification: %v", err)
+		creatorName = "Someone" // fallback
+	}
+
+	// Get all group members except the event creator
+	rows, err := db.Query(`
+		SELECT user_id FROM group_memberships 
+		WHERE group_id = ? AND status = 'accepted' AND user_id != ?
+	`, groupID, excludeUserID)
+	if err != nil {
+		log.Printf("Error getting group members for event notification: %v", err)
+		return err
+	}
+	defer rows.Close()
+
+	// Create personalized message
+	message := creatorName + " created a new event '" + eventTitle + "' in " + groupName
+
+	var notificationCount int
+	for rows.Next() {
+		var userID int
+		if err := rows.Scan(&userID); err == nil {
+			// Create notification with enhanced details
+			if err := createNotification(userID, "group_event", message, &excludeUserID, &groupID); err != nil {
+				log.Printf("Failed to create event notification for user %d: %v", userID, err)
+			} else {
+				notificationCount++
+			}
+		}
+	}
+
+	log.Printf("[Events] Created %d event notifications for group %d", notificationCount, groupID)
+	return nil
+}
+
+// Additional helper function to create event reminder notifications (optional)
+func createEventReminderNotification(eventID int, reminderMessage string) error {
+	// Get event details
+	var groupID, creatorID int
+	var eventTitle string
+	err := db.QueryRow(`
+		SELECT group_id, creator_id, title 
+		FROM events 
+		WHERE event_id = ?
+	`, eventID).Scan(&groupID, &creatorID, &eventTitle)
+	if err != nil {
+		log.Printf("Error getting event details for reminder: %v", err)
+		return err
+	}
+
+	// Get all group members who responded "going" to the event
+	rows, err := db.Query(`
+		SELECT DISTINCT er.user_id 
+		FROM event_responses er
+		JOIN group_memberships gm ON er.user_id = gm.user_id
+		WHERE er.event_id = ? AND er.response = 'going' 
+		AND gm.group_id = ? AND gm.status = 'accepted'
+	`, eventID, groupID)
+	if err != nil {
+		log.Printf("Error getting event attendees for reminder: %v", err)
+		return err
+	}
+	defer rows.Close()
+
+	message := "Reminder: '" + eventTitle + "' " + reminderMessage
+	var reminderCount int
+
+	for rows.Next() {
+		var userID int
+		if err := rows.Scan(&userID); err == nil {
+			if err := createNotification(userID, "group_event", message, &creatorID, &groupID); err != nil {
+				log.Printf("Failed to create event reminder for user %d: %v", userID, err)
+			} else {
+				reminderCount++
+			}
+		}
+	}
+
+	log.Printf("[Events] Created %d event reminders for event %d", reminderCount, eventID)
+	return nil
+}
+
+// Updated respondToEventHandler to potentially send notifications to event creator
+func respondToEventHandler(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		http.Error(w, "Invalid request method", http.StatusMethodNotAllowed)
+		return
+	}
+
+	userEmail := r.Header.Get("User-Email")
+	if userEmail == "" {
+		http.Error(w, "Unauthorized", http.StatusUnauthorized)
+		return
+	}
+
+	var userID int
+	if err := db.QueryRow("SELECT id FROM users WHERE email = ?", userEmail).Scan(&userID); err != nil {
+		log.Printf("[Events] User lookup failed: %v", err)
+		http.Error(w, "User not found", http.StatusUnauthorized)
+		return
+	}
+
+	var req struct {
+		EventID  int    `json:"event_id"`
+		Response string `json:"response"`
+	}
+
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		http.Error(w, "Invalid JSON", http.StatusBadRequest)
+		return
+	}
+
+	if req.Response != "going" && req.Response != "not_going" {
+		http.Error(w, "Response must be 'going' or 'not_going'", http.StatusBadRequest)
+		return
+	}
+
+	// Check if user is member of the group that the event belongs to
+	var groupID, eventCreatorID int
+	var eventTitle string
+	err := db.QueryRow(`
+		SELECT e.group_id, e.creator_id, e.title 
+		FROM events e 
+		WHERE e.event_id = ?
+	`, req.EventID).Scan(&groupID, &eventCreatorID, &eventTitle)
+	if err != nil {
+		if err == sql.ErrNoRows {
+			http.Error(w, "Event not found", http.StatusNotFound)
+		} else {
+			log.Printf("[Events] Error finding event: %v", err)
+			http.Error(w, "Database error", http.StatusInternalServerError)
+		}
+		return
+	}
+
+	var role string
+	err = db.QueryRow("SELECT role FROM group_memberships WHERE group_id = ? AND user_id = ? AND status = 'accepted'",
+		groupID, userID).Scan(&role)
+	if err != nil {
+		if err == sql.ErrNoRows {
+			http.Error(w, "You are not a member of this group", http.StatusForbidden)
+		} else {
+			log.Printf("[Events] Error checking group membership: %v", err)
+			http.Error(w, "Database error", http.StatusInternalServerError)
+		}
+		return
+	}
+
+	// Check if this is a new response or change from previous response
+	var previousResponse string
+	db.QueryRow("SELECT response FROM event_responses WHERE event_id = ? AND user_id = ?",
+		req.EventID, userID).Scan(&previousResponse)
+
+	// Insert or update event response
+	_, err = db.Exec(`INSERT OR REPLACE INTO event_responses (event_id, user_id, response, responded_at) VALUES (?, ?, ?, ?)`,
+		req.EventID, userID, req.Response, time.Now().Format("2006-01-02 15:04:05"))
+	if err != nil {
+		log.Printf("[Events] Event response failed: %v", err)
+		http.Error(w, "Error saving event response", http.StatusInternalServerError)
+		return
+	}
+
+	// Notify event creator if this is a new "going" response and user is not the creator
+	if userID != eventCreatorID && req.Response == "going" && previousResponse != "going" {
+		var responderName string
+		db.QueryRow("SELECT nickname FROM users WHERE id = ?", userID).Scan(&responderName)
+		if responderName == "" {
+			responderName = "Someone"
+		}
+
+		message := responderName + " is attending your event '" + eventTitle + "'"
+		if err := createNotification(eventCreatorID, "group_event", message, &userID, &groupID); err != nil {
+			log.Printf("[Events] Failed to notify event creator: %v", err)
+		}
+	}
+
+	log.Printf("[Events] User %d responded '%s' to event %d", userID, req.Response, req.EventID)
+	w.WriteHeader(http.StatusOK)
+	json.NewEncoder(w).Encode(map[string]string{
+		"message":  "Event response saved successfully",
+		"event_id": strconv.Itoa(req.EventID),
+		"response": req.Response,
+	})
+}
+
+// Add route handler for event creation
+func setupEventRoutes() {
+	// Event management routes
+	http.HandleFunc("/api/events/create", jwtMiddleware(createEventHandler))
+	http.HandleFunc("/api/events/respond", jwtMiddleware(respondToEventHandler))
+
+	// Event deletion route
+	http.HandleFunc("/event/", func(w http.ResponseWriter, r *http.Request) {
+		if r.Method == http.MethodDelete {
+			jwtMiddleware(deleteEventHandler)(w, r)
+		} else {
+			handleEventDynamicRoutes(w, r)
+		}
+	})
 }
 
 // Get events for a group
@@ -188,85 +409,6 @@ func getGroupEventsHandler(w http.ResponseWriter, r *http.Request) {
 	log.Printf("[Groups] Returning %d events for group %d", len(events), groupID)
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(events)
-}
-
-// Respond to event (going/not_going)
-func respondToEventHandler(w http.ResponseWriter, r *http.Request) {
-	if r.Method != http.MethodPost {
-		http.Error(w, "Invalid request method", http.StatusMethodNotAllowed)
-		return
-	}
-
-	userEmail := r.Header.Get("User-Email")
-	if userEmail == "" {
-		http.Error(w, "Unauthorized", http.StatusUnauthorized)
-		return
-	}
-
-	var userID int
-	if err := db.QueryRow("SELECT id FROM users WHERE email = ?", userEmail).Scan(&userID); err != nil {
-		log.Printf("[Groups] User lookup failed: %v", err)
-		http.Error(w, "User not found", http.StatusUnauthorized)
-		return
-	}
-
-	var req struct {
-		EventID  int    `json:"event_id"`
-		Response string `json:"response"`
-	}
-
-	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		http.Error(w, "Invalid JSON", http.StatusBadRequest)
-		return
-	}
-
-	if req.Response != "going" && req.Response != "not_going" {
-		http.Error(w, "Response must be 'going' or 'not_going'", http.StatusBadRequest)
-		return
-	}
-
-	// Check if user is member of the group that the event belongs to
-	var groupID int
-	err := db.QueryRow("SELECT group_id FROM events WHERE event_id = ?", req.EventID).Scan(&groupID)
-	if err != nil {
-		if err == sql.ErrNoRows {
-			http.Error(w, "Event not found", http.StatusNotFound)
-		} else {
-			log.Printf("[Groups] Error finding event: %v", err)
-			http.Error(w, "Database error", http.StatusInternalServerError)
-		}
-		return
-	}
-
-	var role string
-	err = db.QueryRow("SELECT role FROM group_memberships WHERE group_id = ? AND user_id = ? AND status = 'accepted'",
-		groupID, userID).Scan(&role)
-	if err != nil {
-		if err == sql.ErrNoRows {
-			http.Error(w, "You are not a member of this group", http.StatusForbidden)
-		} else {
-			log.Printf("[Groups] Error checking group membership: %v", err)
-			http.Error(w, "Database error", http.StatusInternalServerError)
-		}
-		return
-	}
-
-	// Insert or update event response
-	_, err = db.Exec(`INSERT OR REPLACE INTO event_responses (event_id, user_id, response, responded_at) VALUES (?, ?, ?, ?)`,
-		req.EventID, userID, req.Response, time.Now().Format("2006-01-02 15:04:05"))
-	if err != nil {
-		log.Printf("[Groups] Event response failed: %v", err)
-		http.Error(w, "Error saving event response", http.StatusInternalServerError)
-		return
-	}
-
-	log.Printf("[Groups] User %d responded '%s' to event %d", userID, req.Response, req.EventID)
-	w.WriteHeader(http.StatusOK)
-	json.NewEncoder(w).Encode(map[string]string{
-		"message":  "Event response saved successfully",
-		"event_id": strconv.Itoa(req.EventID),
-		"response": req.Response,
-	})
 }
 
 // Delete event (creators and event creators only)

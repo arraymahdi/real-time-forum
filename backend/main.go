@@ -45,6 +45,10 @@ func main() {
 	http.HandleFunc("/following", withCORS(jwtMiddleware(getFollowingHandler)))
 	http.HandleFunc("/user/follow-status", withCORS(jwtMiddleware(getUserFollowStatusHandler)))
 
+	// Follow request routes
+	http.HandleFunc("/api/follow-requests", jwtMiddleware(getFollowRequestsHandler))
+	http.HandleFunc("/api/follow-requests/handle", jwtMiddleware(handleFollowRequestHandler))
+
 	// Groups
 	http.HandleFunc("/groups/create", withCORS(jwtMiddleware(createGroupHandler)))
 	http.HandleFunc("/groups/browse", withCORS(jwtMiddleware(browseGroupsHandler)))
@@ -65,6 +69,13 @@ func main() {
 	// Dynamic routes
 	http.HandleFunc("/group/", withCORS(handleGroupDynamicRoutes))
 	http.HandleFunc("/event/", withCORS(handleEventDynamicRoutes))
+
+	//Notifications
+	http.HandleFunc("/notifications", withCORS(jwtMiddleware(getNotificationsHandler)))
+	http.HandleFunc("/notifications/read", withCORS(jwtMiddleware(markNotificationReadHandler)))
+	http.HandleFunc("/notifications/read-all", withCORS(jwtMiddleware(markAllNotificationsReadHandler)))
+	http.HandleFunc("/notifications/count", withCORS(jwtMiddleware(getUnreadNotificationCountHandler)))
+	http.HandleFunc("/notifications/delete", withCORS(jwtMiddleware(deleteNotificationHandler)))
 
 	// Users
 	http.HandleFunc("/users", withCORS(getAllUsersHandler))

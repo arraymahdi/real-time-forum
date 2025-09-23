@@ -327,16 +327,79 @@ func inviteToGroupHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Create notification
-	_, err = db.Exec(`INSERT INTO notifications (user_id, type, message) VALUES (?, 'group_invite', ?)`,
-		req.InvitedUserID, "You have been invited to join a group")
-	if err != nil {
+	// Create notification for group invitation
+	if err := createGroupInviteNotification(req.InvitedUserID, userID, req.GroupID); err != nil {
 		log.Printf("[Groups] Notification failed: %v", err)
 	}
 
 	log.Printf("[Groups] User %d invited user %d to group %d", userID, req.InvitedUserID, req.GroupID)
 	w.WriteHeader(http.StatusOK)
 	json.NewEncoder(w).Encode(map[string]string{"message": "Invitation sent successfully"})
+}
+
+// 5. UPDATE requestJoinGroupHandler in groups.go
+func requestJoinGroupHandler(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		http.Error(w, "Invalid request method", http.StatusMethodNotAllowed)
+		return
+	}
+
+	userEmail := r.Header.Get("User-Email")
+	if userEmail == "" {
+		http.Error(w, "Unauthorized", http.StatusUnauthorized)
+		return
+	}
+
+	var userID int
+	if err := db.QueryRow("SELECT id FROM users WHERE email = ?", userEmail).Scan(&userID); err != nil {
+		log.Printf("[Groups] User lookup failed: %v", err)
+		http.Error(w, "User not found", http.StatusUnauthorized)
+		return
+	}
+
+	var req struct {
+		GroupID int `json:"group_id"`
+	}
+
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		http.Error(w, "Invalid JSON", http.StatusBadRequest)
+		return
+	}
+
+	// Check if user already has a membership record
+	var existingStatus string
+	err := db.QueryRow("SELECT status FROM group_memberships WHERE group_id = ? AND user_id = ?",
+		req.GroupID, userID).Scan(&existingStatus)
+	if err == nil {
+		if existingStatus == "accepted" {
+			http.Error(w, "You are already a member", http.StatusBadRequest)
+			return
+		} else if existingStatus == "pending" {
+			http.Error(w, "You have already requested to join", http.StatusBadRequest)
+			return
+		}
+	}
+
+	// Create join request
+	_, err = db.Exec(`INSERT INTO group_memberships (user_id, group_id, role, status) VALUES (?, ?, 'member', 'pending')`,
+		userID, req.GroupID)
+	if err != nil {
+		log.Printf("[Groups] Join request failed: %v", err)
+		http.Error(w, "Error sending join request", http.StatusInternalServerError)
+		return
+	}
+
+	// Notify group creator with notification
+	var creatorID int
+	if err := db.QueryRow("SELECT creator_id FROM groups WHERE group_id = ?", req.GroupID).Scan(&creatorID); err == nil {
+		if err := createGroupJoinRequestNotification(creatorID, userID, req.GroupID); err != nil {
+			log.Printf("[Groups] Notification failed: %v", err)
+		}
+	}
+
+	log.Printf("[Groups] User %d requested to join group %d", userID, req.GroupID)
+	w.WriteHeader(http.StatusOK)
+	json.NewEncoder(w).Encode(map[string]string{"message": "Join request sent successfully"})
 }
 
 // Accept/Reject group invitation or join request
@@ -433,73 +496,6 @@ func respondToGroupRequestHandler(w http.ResponseWriter, r *http.Request) {
 	log.Printf("[Groups] User %d %sed request for user %d in group %d", userID, req.Action, targetUserID, req.GroupID)
 	w.WriteHeader(http.StatusOK)
 	json.NewEncoder(w).Encode(map[string]string{"message": "Request processed successfully"})
-}
-
-// Request to join group
-func requestJoinGroupHandler(w http.ResponseWriter, r *http.Request) {
-	if r.Method != http.MethodPost {
-		http.Error(w, "Invalid request method", http.StatusMethodNotAllowed)
-		return
-	}
-
-	userEmail := r.Header.Get("User-Email")
-	if userEmail == "" {
-		http.Error(w, "Unauthorized", http.StatusUnauthorized)
-		return
-	}
-
-	var userID int
-	if err := db.QueryRow("SELECT id FROM users WHERE email = ?", userEmail).Scan(&userID); err != nil {
-		log.Printf("[Groups] User lookup failed: %v", err)
-		http.Error(w, "User not found", http.StatusUnauthorized)
-		return
-	}
-
-	var req struct {
-		GroupID int `json:"group_id"`
-	}
-
-	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		http.Error(w, "Invalid JSON", http.StatusBadRequest)
-		return
-	}
-
-	// Check if user already has a membership record
-	var existingStatus string
-	err := db.QueryRow("SELECT status FROM group_memberships WHERE group_id = ? AND user_id = ?",
-		req.GroupID, userID).Scan(&existingStatus)
-	if err == nil {
-		if existingStatus == "accepted" {
-			http.Error(w, "You are already a member", http.StatusBadRequest)
-			return
-		} else if existingStatus == "pending" {
-			http.Error(w, "You have already requested to join", http.StatusBadRequest)
-			return
-		}
-	}
-
-	// Create join request
-	_, err = db.Exec(`INSERT INTO group_memberships (user_id, group_id, role, status) VALUES (?, ?, 'member', 'pending')`,
-		userID, req.GroupID)
-	if err != nil {
-		log.Printf("[Groups] Join request failed: %v", err)
-		http.Error(w, "Error sending join request", http.StatusInternalServerError)
-		return
-	}
-
-	// Notify group creator
-	var creatorID int
-	if err := db.QueryRow("SELECT creator_id FROM groups WHERE group_id = ?", req.GroupID).Scan(&creatorID); err == nil {
-		_, err = db.Exec(`INSERT INTO notifications (user_id, type, message) VALUES (?, 'group_request', ?)`,
-			creatorID, "A user has requested to join your group")
-		if err != nil {
-			log.Printf("[Groups] Notification failed: %v", err)
-		}
-	}
-
-	log.Printf("[Groups] User %d requested to join group %d", userID, req.GroupID)
-	w.WriteHeader(http.StatusOK)
-	json.NewEncoder(w).Encode(map[string]string{"message": "Join request sent successfully"})
 }
 
 // Get pending invitations and join requests for the current user

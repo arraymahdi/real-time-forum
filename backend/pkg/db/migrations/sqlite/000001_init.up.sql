@@ -142,3 +142,16 @@ CREATE TABLE post_allowed_followers (
     FOREIGN KEY(post_id) REFERENCES posts(post_id),
     FOREIGN KEY(follower_id) REFERENCES users(id)
 );
+
+-- 13. Following Request
+CREATE TABLE follow_requests (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    requester_id INTEGER NOT NULL,
+    target_id INTEGER NOT NULL,
+    status TEXT CHECK(status IN ('pending','accepted','declined')) DEFAULT 'pending',
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    responded_at TIMESTAMP NULL,
+    UNIQUE(requester_id, target_id),
+    FOREIGN KEY (requester_id) REFERENCES users(id),
+    FOREIGN KEY (target_id) REFERENCES users(id)
+);
