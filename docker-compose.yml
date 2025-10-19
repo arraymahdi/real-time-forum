@@ -1,0 +1,29 @@
+version: "3.9"
+
+services:
+  backend:
+    build:
+      context: .
+      dockerfile: backend/Dockerfile
+    container_name: go-backend
+    ports:
+      - "8088:8088"
+    volumes:
+      - ./backend/data:/app/data      # For SQLite persistence
+      - ./backend/uploads:/app/uploads  # For uploaded files persistence
+    environment:
+      - DB_PATH=/app/data/app.db
+    restart: always
+
+  frontend:
+    build:
+      context: .
+      dockerfile: frontend/Dockerfile
+    container_name: next-frontend
+    ports:
+      - "3000:3000"
+    environment:
+      - NEXT_PUBLIC_API_URL=http://localhost:8088
+    depends_on:
+      - backend
+    restart: always

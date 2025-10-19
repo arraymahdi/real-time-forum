@@ -1,2 +1,57 @@
 vscode/
 uploads/
+
+# ===== Go (backend) =====
+# Binaries and build artifacts
+*.exe
+*.exe~
+*.dll
+*.so
+*.dylib
+*.test
+*.out
+
+# Go workspace
+bin/
+build/
+dist/
+coverage.out
+
+# IDEs / editors
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# Logs and temp files
+*.log
+tmp/
+.env
+.env.*
+!env.example
+
+# ===== Node / Next.js (frontend) =====
+node_modules/
+.next/
+out/
+build/
+coverage/
+dist/
+.npm/
+.yarn/
+.pnp.*
+
+# Local dev files
+*.local
+.env.local
+.env.development.local
+.env.test.local
+.env.production.local
+
+# OS junk
+.DS_Store
+Thumbs.db
+
+# ===== Misc =====
+# Dependency caches
+vendor/

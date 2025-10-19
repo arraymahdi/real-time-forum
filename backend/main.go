@@ -1,88 +1,98 @@
 package main
 
 import (
+	"backend/chat"
+	"backend/comment"
+	"backend/db"
+	"backend/event"
+	"backend/follower"
+	"backend/group"
+	"backend/notification"
+	"backend/post"
+
 	"backend/pkg/db/sqlite"
-	"database/sql"
+	"backend/user"
 	"fmt"
 	"log"
 	"net/http"
 )
 
-var db *sql.DB
-
 func main() {
 	// Initialize the database
-	initDB()
+	db.InitDB()
 	sqlite.ApplyMigrations()
-	defer db.Close()
+	defer db.Instance.Close()
 
 	// Serve static files (images/videos)
 	fs := http.FileServer(http.Dir("uploads"))
 	http.Handle("/uploads/", http.StripPrefix("/uploads/", fs))
 
 	// Auth
-	http.HandleFunc("/register", withCORS(registerHandler))
-	http.HandleFunc("/login", withCORS(loginHandler))
-	http.HandleFunc("/upload-avatar", withCORS(uploadAvatarHandler))
+	http.HandleFunc("/register", withCORS(user.RegisterHandler))
+	http.HandleFunc("/login", withCORS(user.LoginHandler))
+	http.HandleFunc("/upload-avatar", withCORS(user.UploadAvatarHandler))
 
 	// Posts & comments
-	http.HandleFunc("/posts", withCORS(jwtMiddleware(createPostHandler)))
-	http.HandleFunc("/posts/all", withCORS(jwtMiddleware(getPostsHandler)))
-	http.HandleFunc("/post/", withCORS(jwtMiddleware(GetPostByIDHandler)))
-	http.HandleFunc("/comments", withCORS(jwtMiddleware(createCommentHandler)))
-	http.HandleFunc("/comments/all", withCORS(getCommentsByPostHandler))
+	http.HandleFunc("/posts", withCORS(user.JwtMiddleware(post.CreatePostHandler)))
+	http.HandleFunc("/posts/all", withCORS(user.JwtMiddleware(post.GetPostsHandler)))
+	http.HandleFunc("/post/", withCORS(user.JwtMiddleware(post.GetPostByIDHandler)))
+	http.HandleFunc("/posts/mine", withCORS(user.JwtMiddleware(post.GetMyPostsHandler)))
+	http.HandleFunc("/comments", withCORS(user.JwtMiddleware(comment.CreateCommentHandler)))
+	http.HandleFunc("/comments/all", withCORS(comment.GetCommentsByPostHandler))
 
 	// Chat & WebSocket
-	http.HandleFunc("/ws", withCORS(handleConnections))
-	http.HandleFunc("/private-messages", withCORS(jwtMiddleware(getPrivateMessagesHandler)))
-	http.HandleFunc("/group-messages", withCORS(jwtMiddleware(getGroupMessagesHandler)))
-	http.HandleFunc("/chat-list", withCORS(jwtMiddleware(getMessageableUsersAndGroupsHandler)))
+	http.HandleFunc("/ws", withCORS(chat.HandleConnections))
+	http.HandleFunc("/private-messages", withCORS(user.JwtMiddleware(chat.GetPrivateMessagesHandler)))
+	http.HandleFunc("/group-messages", withCORS(user.JwtMiddleware(chat.GetGroupMessagesHandler)))
+	http.HandleFunc("/chat-list", withCORS(user.JwtMiddleware(chat.GetMessageableUsersAndGroupsHandler)))
 
 	// Social
-	http.HandleFunc("/follow", withCORS(jwtMiddleware(followUserHandler)))
-	http.HandleFunc("/unfollow", withCORS(jwtMiddleware(unfollowUserHandler)))
-	http.HandleFunc("/followers", withCORS(jwtMiddleware(getFollowersHandler)))
-	http.HandleFunc("/following", withCORS(jwtMiddleware(getFollowingHandler)))
-	http.HandleFunc("/user/follow-status", withCORS(jwtMiddleware(getUserFollowStatusHandler)))
+	http.HandleFunc("/follow", withCORS(user.JwtMiddleware(follower.FollowUserHandler)))
+	http.HandleFunc("/unfollow", withCORS(user.JwtMiddleware(follower.UnfollowUserHandler)))
+	http.HandleFunc("/followers", withCORS(user.JwtMiddleware(follower.GetFollowersHandler)))
+	http.HandleFunc("/following", withCORS(user.JwtMiddleware(follower.GetFollowingHandler)))
+	http.HandleFunc("/user/follow-status", withCORS(user.JwtMiddleware(follower.GetUserFollowStatusHandler)))
 
 	// Follow request routes
-	http.HandleFunc("/api/follow-requests", jwtMiddleware(getFollowRequestsHandler))
-	http.HandleFunc("/api/follow-requests/handle", jwtMiddleware(handleFollowRequestHandler))
+	http.HandleFunc("/api/follow-requests", withCORS(user.JwtMiddleware(follower.GetFollowRequestsHandler)))
+	http.HandleFunc("/api/follow-requests/handle", withCORS(user.JwtMiddleware(follower.HandleFollowRequestHandler)))
+	http.HandleFunc("/api/follow-request-status", withCORS(user.JwtMiddleware(follower.CheckFollowRequestStatusHandler)))
 
 	// Groups
-	http.HandleFunc("/groups/create", withCORS(jwtMiddleware(createGroupHandler)))
-	http.HandleFunc("/groups/browse", withCORS(jwtMiddleware(browseGroupsHandler)))
-	http.HandleFunc("/groups/my", withCORS(jwtMiddleware(getUserGroupsHandler)))
-	http.HandleFunc("/groups/update", withCORS(jwtMiddleware(updateGroupHandler)))
-	http.HandleFunc("/groups/invite", withCORS(jwtMiddleware(inviteToGroupHandler)))
-	http.HandleFunc("/groups/request", withCORS(jwtMiddleware(requestJoinGroupHandler)))
-	http.HandleFunc("/groups/respond", withCORS(jwtMiddleware(respondToGroupRequestHandler)))
-	http.HandleFunc("/groups/pending", withCORS(jwtMiddleware(getPendingRequestsHandler)))
-	http.HandleFunc("/groups/leave", withCORS(jwtMiddleware(leaveGroupHandler)))
-	http.HandleFunc("/groups/remove", withCORS(jwtMiddleware(removeMemberHandler)))
-	http.HandleFunc("/groups/promote", withCORS(jwtMiddleware(promoteMemberHandler)))
+	http.HandleFunc("/groups/create", withCORS(user.JwtMiddleware(group.CreateGroupHandler)))
+	http.HandleFunc("/groups/browse", withCORS(user.JwtMiddleware(group.BrowseGroupsHandler)))
+	http.HandleFunc("/groups/my", withCORS(user.JwtMiddleware(group.GetUserGroupsHandler)))
+	http.HandleFunc("/groups/update", withCORS(user.JwtMiddleware(group.UpdateGroupHandler)))
+	http.HandleFunc("/groups/invite", withCORS(user.JwtMiddleware(group.InviteToGroupHandler)))
+	http.HandleFunc("/groups/request", withCORS(user.JwtMiddleware(group.RequestJoinGroupHandler)))
+	http.HandleFunc("/groups/respond", withCORS(user.JwtMiddleware(group.RespondToGroupRequestHandler)))
+	http.HandleFunc("/groups/pending", withCORS(user.JwtMiddleware(group.GetPendingRequestsHandler)))
+	http.HandleFunc("/groups/leave", withCORS(user.JwtMiddleware(group.LeaveGroupHandler)))
+	http.HandleFunc("/groups/remove", withCORS(user.JwtMiddleware(group.RemoveMemberHandler)))
+	http.HandleFunc("/groups/promote", withCORS(user.JwtMiddleware(group.PromoteMemberHandler)))
+	http.HandleFunc("/groups/membership-status", withCORS(user.JwtMiddleware(group.GetMembershipStatusesHandler)))
 
 	// Events
-	http.HandleFunc("/events/create", withCORS(jwtMiddleware(createEventHandler)))
-	http.HandleFunc("/events/respond", withCORS(jwtMiddleware(respondToEventHandler)))
+	http.HandleFunc("/events/create", withCORS(user.JwtMiddleware(event.CreateEventHandler)))
+	http.HandleFunc("/events/respond", withCORS(user.JwtMiddleware(event.RespondToEventHandler)))
 
 	// Dynamic routes
-	http.HandleFunc("/group/", withCORS(handleGroupDynamicRoutes))
-	http.HandleFunc("/event/", withCORS(handleEventDynamicRoutes))
+	http.HandleFunc("/group/", withCORS(group.HandleGroupDynamicRoutes))
+	http.HandleFunc("/event/", withCORS(event.HandleEventDynamicRoutes))
 
 	//Notifications
-	http.HandleFunc("/notifications", withCORS(jwtMiddleware(getNotificationsHandler)))
-	http.HandleFunc("/notifications/read", withCORS(jwtMiddleware(markNotificationReadHandler)))
-	http.HandleFunc("/notifications/read-all", withCORS(jwtMiddleware(markAllNotificationsReadHandler)))
-	http.HandleFunc("/notifications/count", withCORS(jwtMiddleware(getUnreadNotificationCountHandler)))
-	http.HandleFunc("/notifications/delete", withCORS(jwtMiddleware(deleteNotificationHandler)))
+	http.HandleFunc("/notifications", withCORS(user.JwtMiddleware(notification.GetNotificationsHandler)))
+	http.HandleFunc("/notifications/read", withCORS(user.JwtMiddleware(notification.MarkNotificationReadHandler)))
+	http.HandleFunc("/notifications/read-all", withCORS(user.JwtMiddleware(notification.MarkAllNotificationsReadHandler)))
+	http.HandleFunc("/notifications/count", withCORS(user.JwtMiddleware(notification.GetUnreadNotificationCountHandler)))
+	http.HandleFunc("/notifications/delete", withCORS(user.JwtMiddleware(notification.DeleteNotificationHandler)))
 
 	// Users
-	http.HandleFunc("/users", withCORS(getAllUsersHandler))
-	http.HandleFunc("/user/profile", withCORS(jwtMiddleware(getCurrentUserProfileHandler)))
-	http.HandleFunc("/user/", withCORS(jwtMiddleware(getUserByIDHandler)))
-	http.HandleFunc("/user/profile/details", withCORS(jwtMiddleware(getFullUserProfileHandler)))
-	http.HandleFunc("/user/profile/update", withCORS(jwtMiddleware(updateUserProfileHandler)))
+	http.HandleFunc("/users", withCORS(user.GetAllUsersHandler))
+	http.HandleFunc("/user/profile", withCORS(user.JwtMiddleware(user.GetCurrentUserProfileHandler)))
+	http.HandleFunc("/user/", withCORS(user.JwtMiddleware(user.GetUserByIDHandler)))
+	http.HandleFunc("/user/profile/details", withCORS(user.JwtMiddleware(user.GetFullUserProfileHandler)))
+	http.HandleFunc("/user/profile/update", withCORS(user.JwtMiddleware(user.UpdateUserProfileHandler)))
 
 	fmt.Println("Server running on port 8088")
 	log.Fatal(http.ListenAndServe(":8088", nil))
